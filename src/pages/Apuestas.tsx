@@ -6,6 +6,7 @@ import { MatchCard } from '@/components/match/MatchCard';
 import { MatchCardSkeleton } from '@/components/common/Loading';
 import { ErrorMessage, EmptyState } from '@/components/common/EmptyState';
 import { BetSlipDesktopPanel } from '@/components/betslip/BetSlipDrawer';
+import { FEATURE_FLAGS } from '@/config/features';
 
 export function Apuestas() {
   const [leagues, setLeagues] = useState<League[]>([]);
@@ -32,6 +33,10 @@ export function Apuestas() {
   }
 
   useEffect(() => {
+    if (!FEATURE_FLAGS.matches) {
+      setLoading(false);
+      return;
+    }
     loadData(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -47,32 +52,43 @@ export function Apuestas() {
         <h1 className="text-2xl font-bold text-text-primary sm:text-3xl">Apuestas</h1>
         <p className="mt-1 text-sm text-text-secondary">Explora los próximos partidos y arma tu cupón.</p>
 
-        <div className="mt-6 mb-5 flex items-center gap-2 overflow-x-auto">
-          <button
-            onClick={() => handleLeagueChange(null)}
-            className={`shrink-0 rounded-lg px-4 py-2 text-sm font-semibold transition-colors duration-200 ${
-              activeLeagueId === null
-                ? 'bg-gold text-bg-primary'
-                : 'border border-border-subtle text-text-secondary hover:text-text-primary'
-            }`}
-          >
-            Todas
-          </button>
-          <LeagueTabs leagues={leagues} activeLeagueId={activeLeagueId} onChange={handleLeagueChange} />
-        </div>
-
-        {error && <ErrorMessage message={error} onRetry={() => loadData(activeLeagueId)} />}
-
-        {!error && !loading && matches.length === 0 && (
-          <EmptyState title="No hay partidos disponibles" description="Vuelve a intentarlo más tarde." />
-        )}
-
-        {!error && (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {loading
-              ? Array.from({ length: 6 }).map((_, i) => <MatchCardSkeleton key={i} />)
-              : matches.map((match) => <MatchCard key={match.id} match={match} />)}
+        {!FEATURE_FLAGS.matches ? (
+          <div className="mt-6">
+            <EmptyState
+              title="Muy pronto"
+              description="Estamos preparando los partidos y cuotas en vivo. Vuelve pronto para armar tu primer cupón."
+            />
           </div>
+        ) : (
+          <>
+            <div className="mt-6 mb-5 flex items-center gap-2 overflow-x-auto">
+              <button
+                onClick={() => handleLeagueChange(null)}
+                className={`shrink-0 rounded-lg px-4 py-2 text-sm font-semibold transition-colors duration-200 ${
+                  activeLeagueId === null
+                    ? 'bg-gold text-bg-primary'
+                    : 'border border-border-subtle text-text-secondary hover:text-text-primary'
+                }`}
+              >
+                Todas
+              </button>
+              <LeagueTabs leagues={leagues} activeLeagueId={activeLeagueId} onChange={handleLeagueChange} />
+            </div>
+
+            {error && <ErrorMessage message={error} onRetry={() => loadData(activeLeagueId)} />}
+
+            {!error && !loading && matches.length === 0 && (
+              <EmptyState title="No hay partidos disponibles" description="Vuelve a intentarlo más tarde." />
+            )}
+
+            {!error && (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {loading
+                  ? Array.from({ length: 6 }).map((_, i) => <MatchCardSkeleton key={i} />)
+                  : matches.map((match) => <MatchCard key={match.id} match={match} />)}
+              </div>
+            )}
+          </>
         )}
       </div>
 
