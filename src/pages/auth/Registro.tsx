@@ -4,60 +4,62 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/useToast';
 import { FormField } from '@/components/common/FormField';
 import { Input } from '@/components/common/Input';
+import { Select } from '@/components/common/Select';
 import { PasswordInput } from '@/components/common/PasswordInput';
 import { Button } from '@/components/common/Button';
+import { DOCUMENT_TYPES } from '@/constants/documentTypes';
 import {
   isAdult,
   isRequired,
   isStrongEnough,
-  isValidDocumentId,
+  isValidDocumentNumber,
   isValidEmail,
   passwordsMatch,
 } from '@/utils/validators';
+import type { RegisterPayload } from '@/types';
 
-interface FormState {
-  fullName: string;
-  email: string;
-  documentId: string;
-  birthDate: string;
-  password: string;
-  passwordConfirmation: string;
-  acceptsTerms: boolean;
-}
-
-type FormErrors = Partial<Record<keyof FormState, string>>;
+type FormErrors = Partial<Record<keyof RegisterPayload, string>>;
 
 const MIN_AGE = 18;
+
+const INITIAL_FORM: RegisterPayload = {
+  firstName: '',
+  middleName: '',
+  lastName: '',
+  secondLastName: '',
+  documentType: '',
+  documentId: '',
+  email: '',
+  birthDate: '',
+  password: '',
+  passwordConfirmation: '',
+  acceptsTerms: false,
+};
 
 export function Registro() {
   const { register } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
 
-  const [form, setForm] = useState<FormState>({
-    fullName: '',
-    email: '',
-    documentId: '',
-    birthDate: '',
-    password: '',
-    passwordConfirmation: '',
-    acceptsTerms: false,
-  });
+  const [form, setForm] = useState<RegisterPayload>(INITIAL_FORM);
   const [errors, setErrors] = useState<FormErrors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  function update<K extends keyof FormState>(key: K, value: FormState[K]) {
+  function update<K extends keyof RegisterPayload>(key: K, value: RegisterPayload[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
   function validate(): boolean {
     const next: FormErrors = {};
-    if (!isRequired(form.fullName)) next.fullName = 'El nombre completo es obligatorio.';
+    if (!isRequired(form.firstName)) next.firstName = 'El primer nombre es obligatorio.';
+    if (!isRequired(form.lastName)) next.lastName = 'El primer apellido es obligatorio.';
+    if (!isRequired(form.documentType)) next.documentType = 'Selecciona un tipo de documento.';
     if (!isRequired(form.email)) next.email = 'El correo es obligatorio.';
     else if (!isValidEmail(form.email)) next.email = 'Ingresa un correo válido.';
-    if (!isRequired(form.documentId)) next.documentId = 'La cédula es obligatoria.';
-    else if (!isValidDocumentId(form.documentId)) next.documentId = 'Ingresa un número de documento válido.';
+    if (!isRequired(form.documentId)) next.documentId = 'El número de documento es obligatorio.';
+    else if (!isValidDocumentNumber(form.documentType, form.documentId))
+      next.documentId = 'Ingresa un número de documento válido.';
     if (!isRequired(form.birthDate)) next.birthDate = 'La fecha de nacimiento es obligatoria.';
     else if (!isAdult(form.birthDate, MIN_AGE)) next.birthDate = `Debes ser mayor de ${MIN_AGE} años para registrarte.`;
     if (!isRequired(form.password)) next.password = 'La contraseña es obligatoria.';
@@ -96,7 +98,7 @@ export function Registro() {
         backgroundPosition: 'center',
       }}
     >
-      <div className="card-surface w-full max-w-md animate-fade-in p-6 sm:p-8">
+      <div className="card-surface w-full max-w-lg animate-fade-in p-6 sm:p-8">
         <div className="mb-6 flex flex-col items-center text-center">
           <img src="/assets/logo.png" alt="PlayBoss" className="mb-4 h-12 w-auto" />
           <h1 className="text-2xl font-bold text-text-primary">Crear cuenta</h1>
@@ -110,16 +112,53 @@ export function Registro() {
         )}
 
         <form onSubmit={handleSubmit} noValidate className="space-y-4">
-          <FormField label="Nombre completo" htmlFor="fullName" error={errors.fullName} required>
-            <Input
-              id="fullName"
-              autoComplete="name"
-              placeholder="Ingresa tu nombre completo"
-              value={form.fullName}
-              onChange={(e) => update('fullName', e.target.value)}
-              error={!!errors.fullName}
-            />
-          </FormField>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <FormField label="Primer nombre" htmlFor="firstName" error={errors.firstName} required>
+              <Input
+                id="firstName"
+                autoComplete="given-name"
+                placeholder="Ej. Daniel"
+                value={form.firstName}
+                onChange={(e) => update('firstName', e.target.value)}
+                error={!!errors.firstName}
+              />
+            </FormField>
+
+            <FormField label="Segundo nombre" htmlFor="middleName" error={errors.middleName} hint="Opcional">
+              <Input
+                id="middleName"
+                autoComplete="additional-name"
+                placeholder="Ej. Andrés"
+                value={form.middleName}
+                onChange={(e) => update('middleName', e.target.value)}
+                error={!!errors.middleName}
+              />
+            </FormField>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <FormField label="Primer apellido" htmlFor="lastName" error={errors.lastName} required>
+              <Input
+                id="lastName"
+                autoComplete="family-name"
+                placeholder="Ej. Molina"
+                value={form.lastName}
+                onChange={(e) => update('lastName', e.target.value)}
+                error={!!errors.lastName}
+              />
+            </FormField>
+
+            <FormField label="Segundo apellido" htmlFor="secondLastName" error={errors.secondLastName} hint="Opcional">
+              <Input
+                id="secondLastName"
+                autoComplete="family-name"
+                placeholder="Ej. Castañeda"
+                value={form.secondLastName}
+                onChange={(e) => update('secondLastName', e.target.value)}
+                error={!!errors.secondLastName}
+              />
+            </FormField>
+          </div>
 
           <FormField label="Correo electrónico" htmlFor="email" error={errors.email} required>
             <Input
@@ -133,16 +172,36 @@ export function Registro() {
             />
           </FormField>
 
-          <FormField label="Cédula de identidad" htmlFor="documentId" error={errors.documentId} required>
-            <Input
-              id="documentId"
-              inputMode="numeric"
-              placeholder="Ingresa tu número de cédula"
-              value={form.documentId}
-              onChange={(e) => update('documentId', e.target.value)}
-              error={!!errors.documentId}
-            />
-          </FormField>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,160px)_1fr]">
+            <FormField label="Tipo de documento" htmlFor="documentType" error={errors.documentType} required>
+              <Select
+                id="documentType"
+                value={form.documentType}
+                onChange={(e) => update('documentType', e.target.value)}
+                error={!!errors.documentType}
+              >
+                <option value="" disabled>
+                  Selecciona
+                </option>
+                {DOCUMENT_TYPES.map((tipo) => (
+                  <option key={tipo.value} value={tipo.value}>
+                    {tipo.label}
+                  </option>
+                ))}
+              </Select>
+            </FormField>
+
+            <FormField label="Número de documento" htmlFor="documentId" error={errors.documentId} required>
+              <Input
+                id="documentId"
+                inputMode="text"
+                placeholder="Ingresa tu número de documento"
+                value={form.documentId}
+                onChange={(e) => update('documentId', e.target.value)}
+                error={!!errors.documentId}
+              />
+            </FormField>
+          </div>
 
           <FormField label="Fecha de nacimiento" htmlFor="birthDate" error={errors.birthDate} required>
             <Input

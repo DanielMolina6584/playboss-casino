@@ -6,99 +6,126 @@ import type {
   User,
   VerifyCodePayload,
 } from '@/types';
-import { setAccessToken } from '@/utils/httpClient';
+import { getAccessToken, httpClient, setAccessToken } from '@/utils/httpClient';
 
 // ---------------------------------------------------------------------------
-// NOTA: Este servicio está preparado para consumir la API REST real.
-// Mientras el backend no está disponible, simula las respuestas con
-// latencia artificial para poder construir y probar todo el flujo de UI.
-// Sustituir el cuerpo de cada función por llamadas a `httpClient` cuando
-// el backend esté listo, sin tener que tocar los componentes.
+// Conectado a la API real de playboss (Laravel + Sanctum).
+// La API trabaja en español (correo, contrasena, primer_nombre...) mientras
+// que el front usa camelCase en inglés: los mapeos viven en este archivo
+// para no tener que tocar componentes ni el resto de la app.
 // ---------------------------------------------------------------------------
 
-const MOCK_DELAY = 700;
-const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+interface ApiUsuario {
+  id_usuario: number;
+  primer_nombre: string;
+  segundo_nombre: string | null;
+  primer_apellido: string;
+  segundo_apellido: string | null;
+  tipo_documento_codigo: string;
+  numero_documento: string;
+  rol_codigo: string;
+  correo: string;
+  celular: string | null;
+  fecha_nacimiento: string;
+  estado_codigo: string;
+  fecha_registro: string;
+}
 
-const MOCK_USER: User = {
-  id: 'usr_1',
-  fullName: 'Daniel Restrepo',
-  email: 'demo@playboss.com',
-  documentId: '1234567890',
-  birthDate: '1995-05-20',
-  createdAt: new Date().toISOString(),
-  role: 'user',
-};
+interface ApiEnvelope<T> {
+  error: 0 | 1;
+  mensaje: string[];
+  data: T;
+}
 
-let mockRecoveryCode = '';
+function mapUsuarioToUser(usuario: ApiUsuario): User {
+  const nombres = [usuario.primer_nombre, usuario.segundo_nombre].filter(Boolean).join(' ');
+  const apellidos = [usuario.primer_apellido, usuario.segundo_apellido].filter(Boolean).join(' ');
+
+  return {
+    id: String(usuario.id_usuario),
+    fullName: [nombres, apellidos].filter(Boolean).join(' '),
+    email: usuario.correo,
+    documentId: usuario.numero_documento,
+    birthDate: usuario.fecha_nacimiento.slice(0, 10),
+    createdAt: usuario.fecha_registro,
+    role: usuario.rol_codigo === 'ADMIN' ? 'admin' : 'user',
+  };
+}
 
 export const authService = {
   async login(payload: LoginPayload): Promise<User> {
-    await wait(MOCK_DELAY);
-    if (payload.email.toLowerCase() !== MOCK_USER.email && payload.password !== 'playboss123') {
-      // Para demo: cualquier correo con contraseña "playboss123" funciona
-      if (payload.password !== 'playboss123') {
-        throw { status: 401, message: 'Correo o contraseña incorrectos.' };
-      }
-    }
-    setAccessToken('mock_access_token');
-    return { ...MOCK_USER, email: payload.email };
+    const res = await httpClient.post<ApiEnvelope<{ usuario: ApiUsuario; token: string }>>(
+      '/auth/login',
+      { correo: payload.email, contrasena: payload.password },
+      { auth: false }
+    );
+    setAccessToken(res.data.token);
+    return mapUsuarioToUser(res.data.usuario);
   },
 
   async register(payload: RegisterPayload): Promise<User> {
-    await wait(MOCK_DELAY);
-    setAccessToken('mock_access_token');
-    return {
-      id: 'usr_new',
-      fullName: payload.fullName,
-      email: payload.email,
-      documentId: payload.documentId,
-      birthDate: payload.birthDate,
-      createdAt: new Date().toISOString(),
-      role: 'user',
-    };
+    const res = await httpClient.post<ApiEnvelope<{ usuario: ApiUsuario; token: string }>>(
+      '/auth/registro',
+      {
+        primer_nombre: payload.firstName,
+        segundo_nombre: payload.middleName || null,
+        primer_apellido: payload.lastName,
+        segundo_apellido: payload.secondLastName || null,
+        tipo_documento_codigo: payload.documentType,
+        numero_documento: payload.documentId,
+        correo: payload.email,
+        fecha_nacimiento: payload.birthDate,
+        contrasena: payload.password,
+        contrasena_confirmation: payload.passwordConfirmation,
+      },
+      { auth: false }
+    );
+    setAccessToken(res.data.token);
+    return mapUsuarioToUser(res.data.usuario);
   },
 
   async logout(): Promise<void> {
-    await wait(200);
-    setAccessToken(null);
+    try {
+      await httpClient.post('/auth/logout');
+    } finally {
+      setAccessToken(null);
+    }
   },
 
   async getCurrentUser(): Promise<User | null> {
-    const hasSession = localStorage.getItem('playboss_access_token');
-    if (!hasSession) return null;
-    await wait(300);
-    return MOCK_USER;
+    // Evita disparar una petición (y el evento de "sesión expirada") cuando
+    // el visitante nunca ha iniciado sesión.
+    if (!getAccessToken()) return null;
+
+    try {
+      const res = await httpClient.get<ApiEnvelope<{ usuario: ApiUsuario }>>('/auth/me');
+      return mapUsuarioToUser(res.data.usuario);
+    } catch {
+      return null;
+    }
   },
 
+  // ------------------------------------------------------------------------
+  // Recuperación de contraseña: aún no implementada en la API (fuera del
+  // alcance de esta entrega). Se deja simulada para no romper esas pantallas.
+  // ------------------------------------------------------------------------
   async forgotPassword(payload: ForgotPasswordPayload): Promise<{ sent: boolean }> {
-    await wait(MOCK_DELAY);
-    mockRecoveryCode = '123456';
     // eslint-disable-next-line no-console
-    console.info(`[DEV] Código de recuperación para ${payload.email}: ${mockRecoveryCode}`);
+    console.warn('[playboss] forgotPassword aún no está conectado a la API', payload);
     return { sent: true };
   },
 
-  async verifyRecoveryCode(payload: VerifyCodePayload): Promise<{ valid: boolean }> {
-    await wait(MOCK_DELAY);
-    if (payload.code !== mockRecoveryCode) {
-      throw { status: 400, message: 'El código ingresado no es válido.' };
-    }
+  async verifyRecoveryCode(_payload: VerifyCodePayload): Promise<{ valid: boolean }> {
     return { valid: true };
   },
 
   async resendRecoveryCode(email: string): Promise<{ sent: boolean }> {
-    await wait(MOCK_DELAY);
-    mockRecoveryCode = '123456';
     // eslint-disable-next-line no-console
-    console.info(`[DEV] Nuevo código de recuperación para ${email}: ${mockRecoveryCode}`);
+    console.warn('[playboss] resendRecoveryCode aún no está conectado a la API', email);
     return { sent: true };
   },
 
-  async resetPassword(payload: ResetPasswordPayload): Promise<{ success: boolean }> {
-    await wait(MOCK_DELAY);
-    if (payload.code !== mockRecoveryCode) {
-      throw { status: 400, message: 'El código de verificación ya expiró.' };
-    }
+  async resetPassword(_payload: ResetPasswordPayload): Promise<{ success: boolean }> {
     return { success: true };
   },
 };

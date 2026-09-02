@@ -5,28 +5,34 @@ referencia (paleta negro/blanco/dorado, estilo premium) y del brief funcional pr
 
 ## 1. Instalación
 
-Requisitos: **Node.js 18+** y npm.
+Requisitos: **Node.js 18+** y npm, y la API (`playboss-api`) corriendo (ver su propio README).
 
 ```bash
-cd playboss
 npm install
 ```
 
 ## 2. Variables de entorno
 
-Copia `.env.example` a `.env` y define la URL de tu API cuando el backend esté listo:
+Copia `.env.example` a `.env`:
 
 ```bash
 cp .env.example .env
 ```
 
 ```
-VITE_API_URL=https://api.playboss.com
+VITE_API_URL=http://127.0.0.1:8811/api
+VITE_FEATURE_MATCHES=false
 ```
 
-Mientras no exista backend, todos los `services/` funcionan con datos simulados
-(`mocks/data.ts` + respuestas mock con latencia artificial), así que la app es
-100% funcional sin API desde el primer `npm run dev`.
+- `VITE_API_URL`: URL base de la API real.
+- `VITE_FEATURE_MATCHES`: muestra u oculta la sección de "Próximos partidos"/cuotas en Home y
+  la página Apuestas (ver `src/config/features.ts`). Se deja en `false` mientras esos datos no
+  vengan de la API real; cuando existan los endpoints, basta con ponerlo en `true` y reiniciar
+  `npm run dev` — no hay que tocar código.
+
+Login y registro ya están conectados a la API real. Partidos/cuotas, apuestas, perfil y
+recuperación de contraseña siguen con datos simulados (`mocks/data.ts` + `services/` con
+latencia artificial) a la espera de sus endpoints correspondientes.
 
 ## 3. Comandos
 
@@ -37,13 +43,14 @@ npm run preview     # sirve el build de producción localmente
 npm run lint         # linting con ESLint
 ```
 
-## 4. Credenciales de prueba (mientras no hay backend)
+## 4. Probar login/registro
 
-- Cualquier correo válido.
-- Contraseña: `playboss123`
+Login y registro usan la API real (`playboss-api`). Para probar: registra un usuario nuevo
+desde `/registro` (pide nombre(s)/apellido(s), tipo y número de documento, correo, fecha de
+nacimiento y contraseña) y luego inicia sesión desde `/login` con esas credenciales.
 
-El código de recuperación de contraseña (mock) es siempre `123456` y se
-imprime también en la consola del navegador para pruebas.
+El código de recuperación de contraseña (`/recuperar/*`) sigue siendo mock — siempre `123456`,
+impreso en la consola del navegador — porque la API todavía no tiene ese endpoint.
 
 ## 5. Arquitectura de carpetas
 
@@ -91,15 +98,16 @@ src/
 - **ProtectedRoute**: si no hay sesión, redirige a `/login` conservando la ruta de origen.
 - **AdminRoute**: exige sesión + `user.role === 'admin'`.
 
-## 7. Conectar con tu API real
+## 7. Conectar el resto de la API
 
-Todos los `services/*.ts` están aislados de los componentes. Para conectar el backend:
+Todos los `services/*.ts` están aislados de los componentes — ningún componente llama `fetch`
+directamente. `authService` ya llama a la API real (`httpClient.post/get`, ver
+`utils/httpClient.ts` para el manejo centralizado de 401/403/500 y token de acceso). Para
+conectar `matchesService`, `betsService` y `userService` cuando existan sus endpoints:
 
-1. Define `VITE_API_URL` en `.env`.
-2. Reemplaza el cuerpo de cada función en `authService`, `matchesService`, `betsService` y
-   `userService` por llamadas a `httpClient` (ya incluido en `utils/httpClient.ts`, con manejo
-   centralizado de 401/403/500 y token de acceso).
-3. No hay que tocar componentes ni páginas: consumen los servicios por su interfaz pública.
+1. Reemplaza el cuerpo de cada función por llamadas a `httpClient`, igual que en `authService`.
+2. No hay que tocar componentes ni páginas: consumen los servicios por su interfaz pública.
+3. Si el endpoint conecta partidos/cuotas, activa `VITE_FEATURE_MATCHES=true` en `.env`.
 
 ## 8. Assets incluidos
 
