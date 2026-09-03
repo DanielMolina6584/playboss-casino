@@ -105,9 +105,13 @@ export interface LoginPayload {
 }
 
 export interface RegisterPayload {
-  fullName: string;
-  email: string;
+  firstName: string;
+  middleName?: string;
+  lastName: string;
+  secondLastName?: string;
+  documentType: string;
   documentId: string;
+  email: string;
   birthDate: string;
   password: string;
   passwordConfirmation: string;
