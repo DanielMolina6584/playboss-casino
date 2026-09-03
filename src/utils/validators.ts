@@ -6,9 +6,15 @@ export function isValidEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
-/** Valida cédulas/documentos numéricos de 6 a 12 dígitos (configurable por país). */
-export function isValidDocumentId(value: string): boolean {
-  return /^\d{6,12}$/.test(value.trim());
+/**
+ * Valida el número de documento según su tipo (códigos de la API):
+ * CC/CE/TI son numéricos, PA (pasaporte) y NIT admiten letras/guion.
+ */
+export function isValidDocumentNumber(documentType: string, value: string): boolean {
+  const v = value.trim();
+  if (documentType === 'PA') return /^[A-Za-z0-9]{5,15}$/.test(v);
+  if (documentType === 'NIT') return /^\d{5,15}-?\d?$/.test(v);
+  return /^\d{6,12}$/.test(v);
 }
 
 export function isAdult(birthDate: string, minAge = 18): boolean {

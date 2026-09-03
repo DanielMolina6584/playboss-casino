@@ -34,8 +34,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('playboss:session-expired', handleExpired);
   }, []);
 
+  // NOTA: "loading" aquí representa únicamente "verificando si hay sesión
+  // activa" (usado por ProtectedRoute/PublicOnlyRoute para decidir si
+  // renderizar). login()/register() NO deben tocarlo: cada formulario ya
+  // maneja su propio estado de carga local para el botón. Si se reutilizara
+  // "loading" también aquí, PublicOnlyRoute desmontaría el formulario de
+  // login/registro apenas se dispara la petición (porque loading pasa a
+  // true) y lo volvería a montar de cero al terminar, perdiendo el mensaje
+  // de error y los valores del formulario.
   const login = useCallback(async (payload: LoginPayload) => {
-    setLoading(true);
     setError(null);
     try {
       const loggedUser = await authService.login(payload);
@@ -44,13 +51,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const message = (err as { message?: string })?.message ?? 'No fue posible iniciar sesión.';
       setError(message);
       throw err;
-    } finally {
-      setLoading(false);
     }
   }, []);
 
   const register = useCallback(async (payload: RegisterPayload) => {
-    setLoading(true);
     setError(null);
     try {
       const newUser = await authService.register(payload);
@@ -59,8 +63,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const message = (err as { message?: string })?.message ?? 'No fue posible crear la cuenta.';
       setError(message);
       throw err;
-    } finally {
-      setLoading(false);
     }
   }, []);
 
