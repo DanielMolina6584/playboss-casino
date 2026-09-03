@@ -7,6 +7,7 @@ import { MatchCard } from '@/components/match/MatchCard';
 import { MatchCardSkeleton } from '@/components/common/Loading';
 import { ErrorMessage } from '@/components/common/EmptyState';
 import { BetSlipDesktopPanel } from '@/components/betslip/BetSlipDrawer';
+import { FEATURE_FLAGS } from '@/config/features';
 
 const benefits = [
   {
@@ -51,6 +52,10 @@ export function Home() {
   }
 
   useEffect(() => {
+    if (!FEATURE_FLAGS.matches) {
+      setLoading(false);
+      return;
+    }
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -129,23 +134,25 @@ export function Home() {
           </Link>
         </section>
 
-        {/* PARTIDOS */}
-        <section className="mt-8">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-xl font-bold text-text-primary">Próximos partidos</h2>
-            <LeagueTabs leagues={leagues} activeLeagueId={activeLeagueId} onChange={handleLeagueChange} />
-          </div>
-
-          {error && <ErrorMessage message={error} onRetry={loadData} />}
-
-          {!error && (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {loading
-                ? Array.from({ length: 4 }).map((_, i) => <MatchCardSkeleton key={i} />)
-                : matches.map((match) => <MatchCard key={match.id} match={match} />)}
+        {/* PARTIDOS (oculto mientras no haya datos reales de partidos/cuotas conectados) */}
+        {FEATURE_FLAGS.matches && (
+          <section className="mt-8">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-xl font-bold text-text-primary">Próximos partidos</h2>
+              <LeagueTabs leagues={leagues} activeLeagueId={activeLeagueId} onChange={handleLeagueChange} />
             </div>
-          )}
-        </section>
+
+            {error && <ErrorMessage message={error} onRetry={loadData} />}
+
+            {!error && (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {loading
+                  ? Array.from({ length: 4 }).map((_, i) => <MatchCardSkeleton key={i} />)
+                  : matches.map((match) => <MatchCard key={match.id} match={match} />)}
+              </div>
+            )}
+          </section>
+        )}
       </div>
 
       <BetSlipDesktopPanel />
