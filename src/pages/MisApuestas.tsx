@@ -1,58 +1,94 @@
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import type { Bet, BetStatus } from '@/types';
+import { useCallback, useEffect, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import type { Bet, BetStatus, Paginated } from '@/types';
 import { betsService } from '@/services/betsService';
 import { EmptyState, ErrorMessage } from '@/components/common/EmptyState';
-import { Loading } from '@/components/common/Loading';
-import { formatCurrency, formatOdd } from '@/utils/formatters';
+import { PageHeader } from '@/components/common/PageHeader';
+import { Pagination } from '@/components/common/Pagination';
+import { Tabs } from '@/components/common/Tabs';
+import { BetCard } from '@/components/bets/BetCard';
+import { CancelBetModal } from '@/components/bets/BetParts';
 
-const statusConfig: Record<BetStatus, { label: string; className: string }> = {
-  pending: { label: 'Pendiente', className: 'bg-gold/15 text-gold' },
-  won: { label: 'Ganada', className: 'bg-emerald-500/15 text-emerald-400' },
-  lost: { label: 'Perdida', className: 'bg-red-500/15 text-red-400' },
-  cashed_out: { label: 'Cobrada', className: 'bg-blue-500/15 text-blue-400' },
+type Tab = 'active' | 'won' | 'lost' | 'all';
+
+const TABS: { value: Tab; label: string }[] = [
+  { value: 'active', label: 'Activos' },
+  { value: 'won', label: 'Ganados' },
+  { value: 'lost', label: 'Perdidos' },
+  { value: 'all', label: 'Todos' },
+];
+const TAB_STATUS: Record<Tab, BetStatus | 'all'> = { active: 'pending', won: 'won', lost: 'lost', all: 'all' };
+const EMPTY: Record<Tab, string> = {
+  active: 'No tienes apuestas activas.',
+  won: 'Aún no has ganado ninguna apuesta.',
+  lost: 'No tienes apuestas perdidas.',
+  all: 'Todavía no tienes apuestas.',
 };
 
 export function MisApuestas() {
-  const [bets, setBets] = useState<Bet[]>([]);
+  const [params, setParams] = useSearchParams();
+  const tab = (TABS.find((t) => t.value === params.get('estado'))?.value ?? 'active') as Tab;
+  const [page, setPage] = useState(1);
+  const [data, setData] = useState<Paginated<Bet> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [toCancel, setToCancel] = useState<Bet | null>(null);
 
-  async function loadBets() {
+  const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await betsService.getMyBets();
-      setBets(data);
-    } catch {
-      setError('No fue posible cargar tu historial de apuestas.');
+      setData(await betsService.getMyBets({ status: TAB_STATUS[tab], page, perPage: 6 }));
+    } catch (err) {
+      setError((err as { message?: string })?.message ?? 'No fue posible cargar tu historial de apuestas.');
     } finally {
       setLoading(false);
     }
-  }
+  }, [tab, page]);
 
   useEffect(() => {
-    loadBets();
-  }, []);
+    load();
+  }, [load]);
+
+  function changeTab(next: Tab) {
+    setPage(1);
+    setParams(next === 'active' ? {} : { estado: next }, { replace: true });
+  }
 
   return (
     <div className="container-page py-8">
-      <h1 className="text-2xl font-bold text-text-primary sm:text-3xl">Mis apuestas</h1>
-      <p className="mt-1 text-sm text-text-secondary">Consulta el historial de tus apuestas realizadas.</p>
+      <PageHeader
+        title="Mis apuestas"
+        description="Consulta tus boletos activos y el historial de resultados."
+        action={
+          <Link to="/apuestas" className="btn-primary">
+            Nueva apuesta
+          </Link>
+        }
+      />
 
-      <div className="mt-6">
+      <Tabs tabs={TABS} value={tab} onChange={changeTab} label="Estado de las apuestas" />
+
+      <div className="mt-6" aria-live="polite">
         {loading && (
-          <div className="flex justify-center py-16">
-            <Loading label="Cargando tus apuestas..." />
+          <div className="grid gap-4 lg:grid-cols-2">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="card-surface space-y-3 p-5">
+                <div className="skeleton h-4 w-32 rounded" />
+                <div className="skeleton h-12 rounded-lg" />
+                <div className="skeleton h-12 rounded-lg" />
+                <div className="skeleton h-4 w-full rounded" />
+              </div>
+            ))}
           </div>
         )}
 
-        {!loading && error && <ErrorMessage message={error} onRetry={loadBets} />}
+        {!loading && error && <ErrorMessage message={error} onRetry={load} />}
 
-        {!loading && !error && bets.length === 0 && (
+        {!loading && !error && data && data.items.length === 0 && (
           <EmptyState
-            title="Todavía no tienes apuestas"
-            description="Explora los próximos partidos y arma tu primer cupón."
+            title={EMPTY[tab]}
+            description="Explora los próximos partidos y arma tu cupón."
             action={
               <Link to="/apuestas" className="btn-primary">
                 Ver partidos
@@ -61,44 +97,26 @@ export function MisApuestas() {
           />
         )}
 
-        {!loading && !error && bets.length > 0 && (
-          <div className="space-y-3">
-            {bets.map((bet) => (
-              <div key={bet.id} className="card-surface p-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-xs text-text-secondary">
-                    {new Date(bet.createdAt).toLocaleString('es-CO')}
-                  </span>
-                  <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusConfig[bet.status].className}`}>
-                    {statusConfig[bet.status].label}
-                  </span>
-                </div>
-
-                <div className="mt-3 space-y-1.5">
-                  {bet.selections.map((s) => (
-                    <div key={s.id} className="flex items-center justify-between text-sm">
-                      <span className="text-text-primary">
-                        {s.matchLabel} — <span className="text-text-secondary">{s.selectionLabel}</span>
-                      </span>
-                      <span className="font-medium text-gold">{formatOdd(s.odd)}</span>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="mt-3 flex items-center justify-between border-t border-border-subtle pt-3 text-sm">
-                  <span className="text-text-secondary">
-                    Monto: <span className="text-text-primary">{formatCurrency(bet.stake)}</span> · Cuota total:{' '}
-                    <span className="text-text-primary">{formatOdd(bet.totalOdds)}</span>
-                  </span>
-                  <span className="font-semibold text-text-primary">
-                    Ganancia: {formatCurrency(bet.potentialWin)}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
+        {!loading && !error && data && data.items.length > 0 && (
+          <>
+            <div className="grid gap-4 lg:grid-cols-2">
+              {data.items.map((bet) => (
+                <BetCard key={bet.id} bet={bet} onCancel={setToCancel} />
+              ))}
+            </div>
+            <Pagination page={data.page} lastPage={data.lastPage} total={data.total} onChange={setPage} />
+          </>
         )}
       </div>
+
+      <CancelBetModal
+        bet={toCancel}
+        onClose={() => setToCancel(null)}
+        onCancelled={() => {
+          setToCancel(null);
+          load();
+        }}
+      />
     </div>
   );
 }

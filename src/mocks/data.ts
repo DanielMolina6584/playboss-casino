@@ -1,110 +1,102 @@
-import type {League, Match, Team} from '@/types';
+import type { League, Match, Market, Team } from '@/types';
+
+// Datos simulados del catálogo (ligas, equipos, partidos y cuotas). Las fechas
+// son relativas a "ahora" para que los filtros Hoy / Mañana siempre tengan datos.
 
 export const leagues: League[] = [
-    {
-        id: 'laliga',
-        name: 'Liga Española',
-        country: 'España',
-        logo: '/assets/logos/laliga/real_madrid.png',
-        active: true,
-    },
-    {
-        id: 'epl',
-        name: 'Premier League',
-        country: 'Inglaterra',
-        logo: '/assets/logos/epl/liverpool.png',
-        active: true,
-    },
+  { id: 'betplay', slug: 'liga-betplay', name: 'Liga BetPlay', country: 'Colombia', active: true },
+  {
+    id: 'laliga',
+    slug: 'laliga',
+    name: 'LaLiga',
+    country: 'España',
+    logo: '/assets/logos/laliga/real_madrid.png',
+    active: true,
+  },
+  {
+    id: 'epl',
+    slug: 'premier-league',
+    name: 'Premier League',
+    country: 'Inglaterra',
+    logo: '/assets/logos/epl/liverpool.png',
+    active: true,
+  },
 ];
 
-const laligaTeams: Record<string, Team> = {
-    barcelona: {id: 'barcelona', name: 'Barcelona', logo: '/assets/logos/laliga/barcelona.png'},
-    realMadrid: {id: 'real_madrid', name: 'Real Madrid', logo: '/assets/logos/laliga/real_madrid.png'},
-    atletico: {id: 'atletico_madrid', name: 'Atlético de Madrid', logo: '/assets/logos/laliga/atletico_madrid.png'},
-    sevilla: {id: 'sevilla', name: 'Sevilla', logo: '/assets/logos/laliga/sevilla.png'},
-    valencia: {id: 'valencia', name: 'Valencia', logo: '/assets/logos/laliga/valencia.png'},
+const t = (id: string, name: string, logo?: string): Team => ({ id, name, logo });
+
+const col = {
+  nacional: t('nacional', 'Atlético Nacional'),
+  millonarios: t('millonarios', 'Millonarios'),
+  junior: t('junior', 'Junior'),
+  america: t('america', 'América de Cali'),
+  santaFe: t('santa_fe', 'Santa Fe'),
+  tolima: t('tolima', 'Deportes Tolima'),
+};
+const esp = {
+  barcelona: t('barcelona', 'Barcelona', '/assets/logos/laliga/barcelona.png'),
+  realMadrid: t('real_madrid', 'Real Madrid', '/assets/logos/laliga/real_madrid.png'),
+  atletico: t('atletico_madrid', 'Atlético de Madrid', '/assets/logos/laliga/atletico_madrid.png'),
+  sevilla: t('sevilla', 'Sevilla', '/assets/logos/laliga/sevilla.png'),
+  valencia: t('valencia', 'Valencia', '/assets/logos/laliga/valencia.png'),
+};
+const eng = {
+  manUnited: t('manchester_united', 'Manchester United', '/assets/logos/epl/manchester_united.png'),
+  liverpool: t('liverpool', 'Liverpool', '/assets/logos/epl/liverpool.png'),
+  chelsea: t('chelsea', 'Chelsea', '/assets/logos/epl/chelsea.png'),
+  arsenal: t('arsenal', 'Arsenal', '/assets/logos/epl/arsenal.png'),
+  manCity: t('manchester_city', 'Manchester City', '/assets/logos/epl/manchester_city.png'),
 };
 
-const eplTeams: Record<string, Team> = {
-    manUnited: {id: 'manchester_united', name: 'Manchester United', logo: '/assets/logos/epl/manchester_united.png'},
-    liverpool: {id: 'liverpool', name: 'Liverpool', logo: '/assets/logos/epl/liverpool.png'},
-    chelsea: {id: 'chelsea', name: 'Chelsea', logo: '/assets/logos/epl/chelsea.png'},
-    arsenal: {id: 'arsenal', name: 'Arsenal', logo: '/assets/logos/epl/arsenal.png'},
-    manCity: {id: 'manchester_city', name: 'Manchester City', logo: '/assets/logos/epl/manchester_city.png'},
-};
-
-function buildMarket(matchId: string, home: number, draw: number, away: number) {
-    return {
-        id: `${matchId}-1x2`,
-        type: '1X2' as const,
-        name: 'Ganador del partido',
-        odds: [
-            {id: `${matchId}-1`, market: '1X2' as const, selection: '1' as const, label: '1', value: home},
-            {id: `${matchId}-x`, market: '1X2' as const, selection: 'X' as const, label: 'X', value: draw},
-            {id: `${matchId}-2`, market: '1X2' as const, selection: '2' as const, label: '2', value: away},
-        ],
-    };
+function market1x2(matchId: string, home: number, draw: number, away: number): Market {
+  return {
+    id: `${matchId}-1x2`,
+    type: '1X2',
+    name: 'Ganador del partido',
+    odds: [
+      { id: `${matchId}-1`, market: '1X2', selection: '1', label: '1', value: home },
+      { id: `${matchId}-x`, market: '1X2', selection: 'X', label: 'X', value: draw },
+      { id: `${matchId}-2`, market: '1X2', selection: '2', label: '2', value: away },
+    ],
+  };
 }
 
+const HOUR = 3_600_000;
+const now = Date.now();
+const at = (hours: number) => new Date(now + hours * HOUR).toISOString();
+
+function match(
+  id: string,
+  league: League,
+  home: Team,
+  away: Team,
+  hours: number,
+  odds: [number, number, number],
+  status: Match['status'] = 'scheduled',
+): Match {
+  return {
+    id,
+    league,
+    homeTeam: home,
+    awayTeam: away,
+    date: at(hours),
+    status,
+    markets: [market1x2(id, ...odds)],
+  };
+}
+
+const [betplay, laliga, epl] = leagues;
+
 export const matches: Match[] = [
-    {
-        id: 'm1',
-        league: leagues[0],
-        homeTeam: laligaTeams.barcelona,
-        awayTeam: laligaTeams.realMadrid,
-        date: new Date().toISOString(),
-        time: 'Hoy · 3:00 PM',
-        status: 'scheduled',
-        markets: [buildMarket('m1', 1.85, 3.6, 4.2)],
-    },
-    {
-        id: 'm2',
-        league: leagues[0],
-        homeTeam: laligaTeams.atletico,
-        awayTeam: laligaTeams.sevilla,
-        date: new Date().toISOString(),
-        time: 'Mañana · 1:00 PM',
-        status: 'scheduled',
-        markets: [buildMarket('m2', 1.7, 3.8, 5.0)],
-    },
-    {
-        id: 'm3',
-        league: leagues[0],
-        homeTeam: laligaTeams.valencia,
-        awayTeam: laligaTeams.realMadrid,
-        date: new Date().toISOString(),
-        time: 'Sábado · 6:30 PM',
-        status: 'scheduled',
-        markets: [buildMarket('m3', 4.5, 3.9, 1.65)],
-    },
-    {
-        id: 'm4',
-        league: leagues[1],
-        homeTeam: eplTeams.manUnited,
-        awayTeam: eplTeams.liverpool,
-        date: new Date().toISOString(),
-        time: 'Hoy · 11:00 AM',
-        status: 'scheduled',
-        markets: [buildMarket('m4', 3.1, 3.4, 2.15)],
-    },
-    {
-        id: 'm5',
-        league: leagues[1],
-        homeTeam: eplTeams.arsenal,
-        awayTeam: eplTeams.chelsea,
-        date: new Date().toISOString(),
-        time: 'Mañana · 2:30 PM',
-        status: 'scheduled',
-        markets: [buildMarket('m5', 2.05, 3.5, 3.4)],
-    },
-    {
-        id: 'm6',
-        league: leagues[1],
-        homeTeam: eplTeams.manCity,
-        awayTeam: eplTeams.manUnited,
-        date: new Date().toISOString(),
-        time: 'Domingo · 9:00 AM',
-        status: 'scheduled',
-        markets: [buildMarket('m6', 1.55, 4.1, 5.8)],
-    },
+  match('m1', laliga, esp.barcelona, esp.realMadrid, 3, [1.85, 3.6, 4.2]),
+  match('m4', epl, eng.manUnited, eng.liverpool, 1.5, [3.1, 3.4, 2.15]),
+  match('m7', betplay, col.nacional, col.millonarios, 4, [2.1, 3.1, 3.4]),
+  match('m8', betplay, col.junior, col.america, 28, [1.95, 3.2, 3.9]),
+  match('m2', laliga, esp.atletico, esp.sevilla, 27, [1.7, 3.8, 5.0]),
+  match('m5', epl, eng.arsenal, eng.chelsea, 29, [2.05, 3.5, 3.4]),
+  match('m9', betplay, col.santaFe, col.tolima, 52, [2.4, 3.0, 2.9]),
+  match('m3', laliga, esp.valencia, esp.realMadrid, 54, [4.5, 3.9, 1.65]),
+  match('m6', epl, eng.manCity, eng.manUnited, 76, [1.55, 4.1, 5.8]),
+  match('m10', betplay, col.millonarios, col.junior, 100, [2.25, 3.1, 3.1]),
+  match('m11', epl, eng.liverpool, eng.arsenal, -0.5, [2.2, 3.3, 3.2], 'live'),
 ];
