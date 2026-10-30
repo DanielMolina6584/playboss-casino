@@ -91,7 +91,7 @@ export function Registro() {
 
   return (
     <div
-      className="flex min-h-[calc(100vh-64px)] items-center justify-center px-4 py-10"
+      className="auth-page flex min-h-[calc(100vh-64px)] items-center justify-center px-4 py-8 sm:py-10"
       style={{
         backgroundImage: "url('/assets/form-backgrounds/form-bg-03.png')",
         backgroundSize: 'cover',

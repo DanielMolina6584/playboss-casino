@@ -1,19 +1,22 @@
 import { useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useWallet } from '@/hooks/useWallet';
 import { Button } from '@/components/common/Button';
+import { formatCurrency } from '@/utils/formatters';
 
 const navLinks = [
   { to: '/', label: 'Inicio' },
   { to: '/apuestas', label: 'Apuestas' },
   { to: '/mis-apuestas', label: 'Mis Apuestas' },
-  { to: '/promociones', label: 'Promociones' },
-  { to: '/ayuda', label: 'Ayuda' },
+  { to: '/#bono', label: 'Promociones' },
+  { to: '/#pagos', label: 'Pagos' },
 ];
 
 export function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const { authenticated, user, logout } = useAuth();
+  const { balance, account } = useWallet();
   const navigate = useNavigate();
 
   async function handleLogout() {
@@ -49,12 +52,22 @@ export function Navbar() {
           {authenticated ? (
             <>
               <Link
+                to="/billetera"
+                aria-label="Mi saldo"
+                className="rounded-lg border border-gold/30 bg-gold/10 px-3 py-2 text-sm font-bold text-gold hover:bg-gold/15"
+              >
+                {account ? formatCurrency(balance) : '…'}
+              </Link>
+              <Link to="/billetera/recarga" className="btn-primary px-4 py-2 text-sm">
+                Recargar
+              </Link>
+              <Link
                 to="/perfil"
                 className="rounded-lg px-3 py-2 text-sm font-medium text-text-secondary transition-colors hover:text-text-primary"
               >
                 {user?.fullName?.split(' ')[0] ?? 'Mi cuenta'}
               </Link>
-              <Button variant="secondary" onClick={handleLogout}>
+              <Button variant="secondary" onClick={handleLogout} className="px-4 py-2 text-sm">
                 Cerrar sesión
               </Button>
             </>
@@ -73,8 +86,9 @@ export function Navbar() {
         <button
           className="rounded-lg p-2 text-text-primary lg:hidden"
           onClick={() => setMenuOpen((v) => !v)}
-          aria-label="Abrir menú"
+          aria-label={menuOpen ? 'Cerrar menú' : 'Abrir menú'}
           aria-expanded={menuOpen}
+          aria-controls="mobile-navigation"
         >
           {menuOpen ? (
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -92,7 +106,7 @@ export function Navbar() {
       </div>
 
       {menuOpen && (
-        <div className="animate-fade-in border-t border-border-subtle bg-bg-primary lg:hidden">
+        <div id="mobile-navigation" className="animate-fade-in border-t border-border-subtle bg-bg-primary lg:hidden">
           <nav className="container-page flex flex-col gap-1 py-3">
             {navLinks.map((link) => (
               <NavLink
@@ -111,10 +125,21 @@ export function Navbar() {
             <div className="mt-2 flex flex-col gap-2 border-t border-border-subtle pt-3">
               {authenticated ? (
                 <>
+                  <Link
+                    to="/billetera"
+                    onClick={() => setMenuOpen(false)}
+                    className="flex items-center justify-between rounded-lg border border-gold/30 bg-gold/10 px-4 py-3 text-sm font-bold text-gold"
+                  >
+                    <span className="font-medium text-text-secondary">Mi saldo</span>
+                    {account ? formatCurrency(balance) : '…'}
+                  </Link>
+                  <Link to="/billetera/recarga" className="btn-primary" onClick={() => setMenuOpen(false)}>
+                    Recargar saldo
+                  </Link>
                   <Link to="/perfil" className="btn-secondary" onClick={() => setMenuOpen(false)}>
                     Mi perfil
                   </Link>
-                  <Button variant="primary" onClick={handleLogout}>
+                  <Button variant="ghost" onClick={handleLogout}>
                     Cerrar sesión
                   </Button>
                 </>

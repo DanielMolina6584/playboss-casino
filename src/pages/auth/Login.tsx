@@ -44,7 +44,8 @@ export function Login() {
     try {
       await login({ email, password, remember });
       showToast('¡Bienvenido de nuevo!', 'success');
-      const redirectTo = (location.state as { from?: Location })?.from?.pathname ?? '/';
+      const from = (location.state as { from?: Location })?.from;
+      const redirectTo = from ? `${from.pathname}${from.search ?? ''}` : '/';
       navigate(redirectTo, { replace: true });
     } catch (err) {
       setSubmitError((err as { message?: string })?.message ?? 'No fue posible iniciar sesión.');
@@ -55,7 +56,7 @@ export function Login() {
 
   return (
     <div
-      className="flex min-h-[calc(100vh-64px)] items-center justify-center px-4 py-10"
+      className="auth-page flex min-h-[calc(100vh-64px)] items-center justify-center px-4 py-8 sm:py-10"
       style={{
         backgroundImage: "url('/assets/form-backgrounds/form-bg-02.png')",
         backgroundSize: 'cover',

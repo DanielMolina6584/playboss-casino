@@ -2,9 +2,11 @@ import { useBetSlip } from '@/hooks/useBetSlip';
 import { BetSlip } from '@/components/betslip/BetSlip';
 
 export function BetSlipDesktopPanel() {
+  const { selections } = useBetSlip();
+
   return (
-    <aside className="sticky top-20 hidden h-[calc(100vh-6rem)] w-[340px] shrink-0 xl:block">
-      <div className="card-surface flex h-full flex-col p-4">
+    <aside className={`sticky top-20 hidden w-[320px] shrink-0 xl:block ${selections.length ? 'h-[calc(100vh-9rem)]' : 'h-fit'}`}>
+      <div className={`card-surface flex flex-col p-3.5 ${selections.length ? 'h-full' : ''}`}>
         <BetSlip />
       </div>
     </aside>

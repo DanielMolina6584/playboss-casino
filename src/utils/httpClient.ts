@@ -20,18 +20,33 @@ interface RequestOptions extends RequestInit {
   auth?: boolean;
 }
 
+/** Sobre de respuesta común de la API: { error, mensaje[], data }. */
+export interface ApiEnvelope<T> {
+  error: 0 | 1;
+  mensaje: string[];
+  data: T;
+}
+
+export interface ApiPage<T> {
+  items: T[];
+  meta: { page: number; per_page: number; total: number; last_page: number };
+}
+
 /**
  * Cliente HTTP centralizado. Nunca se debe usar fetch/axios directamente
  * dentro de componentes: todos los servicios pasan por aquí.
  *
  * Maneja: headers comunes, token de acceso, sesión expirada (401),
  * prohibido (403) y errores de servidor (500) de forma centralizada.
+ * Marca `unavailable: true` cuando la API no está accesible (sin red, 404 HTML,
+ * 502/503/504) para que services/dataSource pueda caer a datos simulados.
  */
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { auth = true, headers, ...rest } = options;
 
   const finalHeaders: HeadersInit = {
     'Content-Type': 'application/json',
+    Accept: 'application/json',
     ...headers,
   };
 
@@ -44,12 +59,13 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
   let response: Response;
   try {
-    response = await fetch(`${API_BASE_URL}${path}`, {
-      ...rest,
-      headers: finalHeaders,
-    });
+    response = await fetch(`${API_BASE_URL}${path}`, { ...rest, headers: finalHeaders });
   } catch {
-    const networkError: ApiError = { status: 0, message: 'No fue posible conectar con el servidor.' };
+    const networkError: ApiError = {
+      status: 0,
+      message: 'No fue posible conectar con el servidor.',
+      unavailable: true,
+    };
     throw networkError;
   }
 
@@ -69,7 +85,11 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
 
   if (response.status >= 500) {
-    const err: ApiError = { status: response.status, message: 'Ocurrió un error en el servidor. Intenta más tarde.' };
+    const err: ApiError = {
+      status: response.status,
+      message: 'Ocurrió un error en el servidor. Intenta más tarde.',
+      unavailable: [502, 503, 504].includes(response.status),
+    };
     throw err;
   }
 
@@ -77,15 +97,21 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     // La API responde { error, mensaje: string[], data } en vez del
     // { message, errors } genérico; se soportan ambos formatos aquí.
     let body: { message?: string; mensaje?: string[]; errors?: Record<string, string[]> } = {};
+    let jsonBody = true;
     try {
       body = await response.json();
     } catch {
-      /* respuesta sin cuerpo JSON */
+      jsonBody = false; // p. ej. HTML 404 del servidor web: la API no está desplegada
     }
+    const fieldErrors = body.errors ? Object.values(body.errors).flat() : [];
     const err: ApiError = {
       status: response.status,
-      message: body.message ?? (body.mensaje?.length ? body.mensaje.join(' ') : undefined) ?? 'Ocurrió un error inesperado.',
+      message:
+        body.mensaje?.length
+          ? body.mensaje.join(' ')
+          : (fieldErrors[0] ?? body.message ?? 'Ocurrió un error inesperado.'),
       errors: body.errors,
+      unavailable: !jsonBody && response.status === 404,
     };
     throw err;
   }
@@ -94,7 +120,22 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     return undefined as T;
   }
 
-  return (await response.json()) as T;
+  try {
+    return (await response.json()) as T;
+  } catch {
+    const err: ApiError = { status: response.status, message: 'Respuesta inválida del servidor.', unavailable: true };
+    throw err;
+  }
+}
+
+/** Arma "?a=1&b=2" omitiendo valores vacíos. */
+export function toQuery(params: Record<string, string | number | undefined | null>): string {
+  const q = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== '') q.set(k, String(v));
+  });
+  const s = q.toString();
+  return s ? `?${s}` : '';
 }
 
 export const httpClient = {
