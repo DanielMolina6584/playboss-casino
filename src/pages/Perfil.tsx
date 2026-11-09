@@ -8,6 +8,8 @@ import { Input } from '@/components/common/Input';
 import { PasswordInput } from '@/components/common/PasswordInput';
 import { Button } from '@/components/common/Button';
 import { PageHeader } from '@/components/common/PageHeader';
+import { PhotoPicker, validatePhoto } from '@/components/common/PhotoPicker';
+import { useUserPhoto } from '@/components/common/UserAvatar';
 import { userService } from '@/services/userService';
 import { formatAmountInput, formatDate, maskDocumentId, parseAmount } from '@/utils/formatters';
 import { isRequired, isStrongEnough, passwordsMatch } from '@/utils/validators';
@@ -69,6 +71,66 @@ function ProfileForm() {
         <Button type="submit" loading={loading}>Guardar cambios</Button>
       </div>
     </form>
+  );
+}
+
+function PhotoForm() {
+  const { user, updateUser } = useAuth();
+  const { showToast } = useToast();
+  const currentUrl = useUserPhoto(user!);
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [error, setError] = useState<string | undefined>();
+  const [loading, setLoading] = useState(false);
+
+  async function handleSave() {
+    const invalid = validatePhoto(photo);
+    if (invalid || !photo) {
+      setError(invalid ?? undefined);
+      return;
+    }
+    setLoading(true);
+    try {
+      updateUser(await userService.uploadPhoto(photo));
+      setPhoto(null);
+      showToast('Foto de perfil actualizada.', 'success');
+    } catch (err) {
+      setError((err as { message?: string })?.message ?? 'No fue posible cambiar tu foto.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-3">
+      <PhotoPicker
+        value={photo}
+        currentUrl={currentUrl}
+        onChange={(file) => {
+          setPhoto(file);
+          setError(file ? (validatePhoto(file) ?? undefined) : undefined);
+        }}
+        error={error}
+        label="Agregar foto"
+      />
+      {photo && (
+        <div className="flex gap-2">
+          <Button onClick={handleSave} loading={loading} className="px-4 py-2 text-sm">
+            Guardar foto
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              setPhoto(null);
+              setError(undefined);
+            }}
+            disabled={loading}
+            className="px-4 py-2 text-sm"
+          >
+            Cancelar
+          </Button>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -171,14 +233,10 @@ export function Perfil() {
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="card-surface h-fit p-5">
-          <div className="flex items-center gap-3">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-gold/15 text-xl font-bold text-gold" aria-hidden="true">
-              {user.fullName.charAt(0).toUpperCase()}
-            </div>
-            <div className="min-w-0">
-              <p className="truncate font-semibold text-text-primary">{user.fullName}</p>
-              <p className="truncate text-sm text-text-secondary">{user.email}</p>
-            </div>
+          <PhotoForm />
+          <div className="mt-4 min-w-0 text-center">
+            <p className="truncate font-semibold text-text-primary">{user.fullName}</p>
+            <p className="truncate text-sm text-text-secondary">{user.email}</p>
           </div>
           <dl className="mt-5 space-y-3 text-sm">
             <div className="flex justify-between"><dt className="text-text-secondary">Documento</dt><dd className="text-text-primary">{maskDocumentId(user.documentId)}</dd></div>
