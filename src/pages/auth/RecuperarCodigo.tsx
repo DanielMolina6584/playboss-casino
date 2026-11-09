@@ -4,6 +4,8 @@ import { authService } from '@/services/authService';
 import { CodeInput } from '@/components/common/CodeInput';
 import { Button } from '@/components/common/Button';
 import { useToast } from '@/hooks/useToast';
+import { isMockActive } from '@/services/dataSource';
+import { MOCK_RECOVERY_CODE } from '@/mocks/store';
 
 const RESEND_SECONDS = 45;
 
@@ -61,7 +63,7 @@ export function RecuperarCodigo() {
 
   return (
     <div
-      className="flex min-h-[calc(100vh-64px)] items-center justify-center px-4 py-10"
+      className="auth-page flex min-h-[calc(100vh-64px)] items-center justify-center px-4 py-8 sm:py-10"
       style={{
         backgroundImage: "url('/assets/form-backgrounds/form-bg-04.png')",
         backgroundSize: 'cover',
@@ -85,7 +87,10 @@ export function RecuperarCodigo() {
             verify(fullCode);
           }}
         />
-        {error && <p className="mt-3 text-center text-sm text-red-400">{error}</p>}
+        {error && <p role="alert" className="mt-3 text-center text-sm text-red-400">{error}</p>}
+        {isMockActive() && (
+          <p className="mt-3 text-center text-xs text-gold">Modo demostración: el código es {MOCK_RECOVERY_CODE}.</p>
+        )}
 
         <div className="mt-5 text-center text-sm text-text-secondary">
           {countdown > 0 ? (

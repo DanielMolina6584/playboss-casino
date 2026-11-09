@@ -13,9 +13,41 @@
         scroll-behavior: smooth;
     }
 
+    :focus-visible {
+        outline: 2px solid #ffc400;
+        outline-offset: 2px;
+    }
+
+    #beneficios,
+    #bono,
+    #pagos,
+    #juego-responsable {
+        scroll-margin-top: 5.5rem;
+    }
+
     body {
         @apply bg-bg-primary text-text-primary font-sans antialiased;
         overflow-x: hidden;
+    }
+
+    .auth-page {
+        position: relative;
+        isolation: isolate;
+        background-size: cover;
+        background-position: center;
+    }
+
+    .auth-page::before {
+        position: absolute;
+        z-index: 0;
+        inset: 0;
+        background: linear-gradient(135deg, rgb(5 8 13 / 62%), rgb(5 8 13 / 86%));
+        content: '';
+    }
+
+    .auth-page > * {
+        position: relative;
+        z-index: 1;
     }
 
     ::selection {

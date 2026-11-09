@@ -1,4 +1,4 @@
-import { Navigate, Outlet } from 'react-router-dom';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Loading } from '@/components/common/Loading';
 
@@ -8,6 +8,7 @@ import { Loading } from '@/components/common/Loading';
  */
 export function PublicOnlyRoute() {
   const { authenticated, loading } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return (
@@ -18,7 +19,8 @@ export function PublicOnlyRoute() {
   }
 
   if (authenticated) {
-    return <Navigate to="/" replace />;
+    const from = (location.state as { from?: { pathname: string; search?: string } } | null)?.from;
+    return <Navigate to={from ? `${from.pathname}${from.search ?? ''}` : '/'} replace />;
   }
 
   return <Outlet />;
