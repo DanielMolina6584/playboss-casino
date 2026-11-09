@@ -4,7 +4,7 @@ import { currentMockUserId, isMockActive, mockError, withMock } from '@/services
 import { getDb, saveDb } from '@/mocks/store';
 import { mapUsuarioToUser, type ApiUsuario } from '@/services/authService';
 
-// Contrato: PUT /perfil, PUT /perfil/contrasena (docs/CONTRATOS-API.md)
+// Contrato: PUT /perfil, PUT /perfil/contrasena, GET|POST /perfil/foto (docs/CONTRATOS-API.md)
 
 export interface ProfileChanges {
   firstName: string;
@@ -61,6 +61,26 @@ export const userService = {
         saveDb();
       },
     );
+  },
+
+  /** Sube o reemplaza la foto de perfil (la API la guarda en Google Drive). */
+  uploadPhoto(photo: File): Promise<User> {
+    return withMock(
+      async () => {
+        const form = new FormData();
+        form.append('foto', photo);
+        const res = await httpClient.postForm<ApiEnvelope<{ usuario: ApiUsuario }>>('/perfil/foto', form);
+        return mapUsuarioToUser(res.data.usuario);
+      },
+      () => {
+        throw mockError('La foto de perfil solo se puede cambiar con la API conectada.');
+      },
+    );
+  },
+
+  /** Descarga la foto de perfil como archivo (la petición lleva el token). */
+  getPhoto(): Promise<Blob> {
+    return httpClient.getBlob('/perfil/foto');
   },
 
   /** Límites de juego responsable: aún sin endpoint, se guardan solo en este navegador. */
