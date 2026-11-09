@@ -7,6 +7,7 @@ import { Input } from '@/components/common/Input';
 import { Select } from '@/components/common/Select';
 import { PasswordInput } from '@/components/common/PasswordInput';
 import { Button } from '@/components/common/Button';
+import { PhotoPicker, validatePhoto } from '@/components/common/PhotoPicker';
 import { DOCUMENT_TYPES } from '@/constants/documentTypes';
 import {
   isAdult,
@@ -34,6 +35,7 @@ const INITIAL_FORM: RegisterPayload = {
   password: '',
   passwordConfirmation: '',
   acceptsTerms: false,
+  photo: null,
 };
 
 export function Registro() {
@@ -52,6 +54,8 @@ export function Registro() {
 
   function validate(): boolean {
     const next: FormErrors = {};
+    const photoError = validatePhoto(form.photo);
+    if (photoError) next.photo = photoError;
     if (!isRequired(form.firstName)) next.firstName = 'El primer nombre es obligatorio.';
     if (!isRequired(form.lastName)) next.lastName = 'El primer apellido es obligatorio.';
     if (!isRequired(form.documentType)) next.documentType = 'Selecciona un tipo de documento.';
@@ -112,6 +116,16 @@ export function Registro() {
         )}
 
         <form onSubmit={handleSubmit} noValidate className="space-y-4">
+          <PhotoPicker
+            value={form.photo}
+            onChange={(file) => {
+              update('photo', file);
+              setErrors((prev) => ({ ...prev, photo: validatePhoto(file) ?? undefined }));
+            }}
+            error={errors.photo}
+            label="Sube tu foto de perfil"
+          />
+
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <FormField label="Primer nombre" htmlFor="firstName" error={errors.firstName} required>
               <Input

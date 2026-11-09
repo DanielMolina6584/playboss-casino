@@ -31,6 +31,7 @@ export interface ApiUsuario {
   fecha_nacimiento: string;
   estado_codigo: string;
   fecha_registro: string;
+  foto_drive_id?: string | null;
 }
 
 export function mapUsuarioToUser(usuario: ApiUsuario): User {
@@ -50,6 +51,7 @@ export function mapUsuarioToUser(usuario: ApiUsuario): User {
     createdAt: usuario.fecha_registro,
     role: usuario.rol_codigo === 'ADMIN' ? 'admin' : 'user',
     phone: usuario.celular ?? undefined,
+    photoId: usuario.foto_drive_id ?? undefined,
   };
 }
 
@@ -77,22 +79,27 @@ export const authService = {
   register(payload: RegisterPayload): Promise<User> {
     return withMock(
       async () => {
-        const res = await httpClient.post<ApiEnvelope<{ usuario: ApiUsuario; token: string }>>(
-          '/auth/registro',
-          {
-            primer_nombre: payload.firstName,
-            segundo_nombre: payload.middleName || null,
-            primer_apellido: payload.lastName,
-            segundo_apellido: payload.secondLastName || null,
-            tipo_documento_codigo: payload.documentType,
-            numero_documento: payload.documentId,
-            correo: payload.email,
-            fecha_nacimiento: payload.birthDate,
-            contrasena: payload.password,
-            contrasena_confirmation: payload.passwordConfirmation,
-          },
-          { auth: false },
-        );
+        // multipart/form-data porque incluye la foto de perfil (se guarda en Google Drive).
+        const form = new FormData();
+        const campos: Record<string, string | undefined> = {
+          primer_nombre: payload.firstName,
+          segundo_nombre: payload.middleName,
+          primer_apellido: payload.lastName,
+          segundo_apellido: payload.secondLastName,
+          tipo_documento_codigo: payload.documentType,
+          numero_documento: payload.documentId,
+          correo: payload.email,
+          fecha_nacimiento: payload.birthDate,
+          contrasena: payload.password,
+          contrasena_confirmation: payload.passwordConfirmation,
+        };
+        Object.entries(campos).forEach(([k, v]) => {
+          if (v) form.append(k, v);
+        });
+        if (payload.photo) form.append('foto', payload.photo);
+        const res = await httpClient.postForm<ApiEnvelope<{ usuario: ApiUsuario; token: string }>>('/auth/registro', form, {
+          auth: false,
+        });
         setAccessToken(res.data.token);
         return mapUsuarioToUser(res.data.usuario);
       },

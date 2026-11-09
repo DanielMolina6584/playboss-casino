@@ -16,6 +16,8 @@ export interface User {
   middleName?: string;
   lastName?: string;
   secondLastName?: string;
+  /** Id de la foto de perfil en Google Drive (se descarga con GET /perfil/foto). */
+  photoId?: string;
 }
 
 export interface Sport {
@@ -248,6 +250,8 @@ export interface RegisterPayload {
   password: string;
   passwordConfirmation: string;
   acceptsTerms: boolean;
+  /** Foto de perfil obligatoria; la API la guarda en Google Drive. */
+  photo: File | null;
 }
 
 export interface ForgotPasswordPayload {
