@@ -73,6 +73,20 @@ function mapMercado(matchId: string, m: ApiMercado): Market {
   };
 }
 
+/**
+ * Ruta del escudo local por nombre del equipo (public/assets/escudos/<slug>.png).
+ * Si el archivo no existe, TeamBadge muestra las iniciales.
+ */
+function escudoUrl(nombre: string): string {
+  const slug = nombre
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '');
+  return `/assets/escudos/${slug}.png`;
+}
+
 function mapPartido(p: ApiPartido, markets: Market[]): Match {
   const liga = p.jornada?.temporada?.liga;
   return {
@@ -80,10 +94,16 @@ function mapPartido(p: ApiPartido, markets: Market[]): Match {
     league: liga
       ? mapLiga(liga)
       : { id: '0', slug: 'otras', name: 'Otras ligas', country: '', active: true },
-    homeTeam: { id: String(p.local.id_equipo), name: p.local.nombre, driveFileId: p.local.escudo_drive_id ?? undefined },
+    homeTeam: {
+      id: String(p.local.id_equipo),
+      name: p.local.nombre,
+      logo: escudoUrl(p.local.nombre),
+      driveFileId: p.local.escudo_drive_id ?? undefined,
+    },
     awayTeam: {
       id: String(p.visitante.id_equipo),
       name: p.visitante.nombre,
+      logo: escudoUrl(p.visitante.nombre),
       driveFileId: p.visitante.escudo_drive_id ?? undefined,
     },
     date: p.fecha_hora,
@@ -159,8 +179,19 @@ export const matchesService = {
     return list;
   },
 
+  /** Un partido con todos sus mercados abiertos (GET /partidos/{id} y /partidos/{id}/mercados). */
   async getMatchById(matchId: string): Promise<Match | undefined> {
-    const all = await matchesService.getMatches();
-    return all.find((m) => m.id === matchId);
+    const match = await withMock(
+      async () => {
+        const [partido, mercados] = await Promise.all([
+          httpClient.get<ApiEnvelope<ApiPartido>>(`/partidos/${matchId}`, { auth: false }),
+          httpClient.get<ApiEnvelope<ApiMercado[]>>(`/partidos/${matchId}/mercados`, { auth: false }),
+        ]);
+        return mapPartido(partido.data, mercados.data.map((m) => mapMercado(matchId, m)));
+      },
+      () => mockMatches.find((m) => m.id === matchId),
+    );
+    if (match) rememberMatchLabels([{ id: match.id, label: `${match.homeTeam.name} vs ${match.awayTeam.name}` }]);
+    return match;
   },
 };

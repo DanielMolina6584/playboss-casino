@@ -10,6 +10,7 @@ import { matchLabelFor, rememberMatchLabels } from '@/utils/matchLabels';
 interface ApiDetalle {
   partido_id: number;
   market_id: string;
+  mercado?: string | null;
   selection_code: string;
   etiqueta: string | null;
   cuota: string | number;
@@ -63,7 +64,7 @@ function mapApuesta(a: ApiApuesta, userId = ''): Bet {
       marketId: d.market_id,
       selectionCode: d.selection_code,
       matchLabel: matchLabelFor(String(d.partido_id)),
-      marketName: 'Ganador del partido',
+      marketName: d.mercado ?? 'Ganador del partido',
       selectionLabel: d.etiqueta ?? d.selection_code,
       odd: Number(d.cuota),
       result: mapResult(d.resultado),
