@@ -5,14 +5,18 @@ interface OddsButtonProps {
   odd: Odd;
   isSelected: boolean;
   onClick: () => void;
+  disabled?: boolean;
+  ariaLabel?: string;
 }
 
-export function OddsButton({ odd, isSelected, onClick }: OddsButtonProps) {
+export function OddsButton({ odd, isSelected, onClick, disabled, ariaLabel }: OddsButtonProps) {
   return (
     <button
       onClick={onClick}
+      disabled={disabled}
       aria-pressed={isSelected}
-      className={`flex flex-col items-center justify-center rounded-lg border px-2 py-2.5 transition-all duration-200 active:scale-[0.97] ${
+      aria-label={ariaLabel}
+      className={`flex flex-col items-center justify-center rounded-lg border px-2 py-2.5 transition-all duration-200 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 ${
         isSelected
           ? 'border-gold bg-gold/15 text-gold'
           : 'border-border-subtle bg-bg-secondary text-text-primary hover:border-gold/40 hover:bg-white/5'
