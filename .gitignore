@@ -6,3 +6,6 @@ dist
 .DS_Store
 .idea
 tsconfig.tsbuildinfo
+
+# Escudos oficiales de los clubes (marcas registradas): solo locales, no se suben al repo
+public/assets/escudos/
