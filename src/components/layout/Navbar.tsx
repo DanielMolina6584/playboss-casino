@@ -3,6 +3,7 @@ import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useWallet } from '@/hooks/useWallet';
 import { Button } from '@/components/common/Button';
+import { UserAvatar } from '@/components/common/UserAvatar';
 import { formatCurrency } from '@/utils/formatters';
 
 const navLinks = [
@@ -63,8 +64,9 @@ export function Navbar() {
               </Link>
               <Link
                 to="/perfil"
-                className="rounded-lg px-3 py-2 text-sm font-medium text-text-secondary transition-colors hover:text-text-primary"
+                className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-text-secondary transition-colors hover:text-text-primary"
               >
+                {user && <UserAvatar user={user} size="sm" />}
                 {user?.fullName?.split(' ')[0] ?? 'Mi cuenta'}
               </Link>
               <Button variant="secondary" onClick={handleLogout} className="px-4 py-2 text-sm">
