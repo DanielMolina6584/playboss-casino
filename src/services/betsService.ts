@@ -3,12 +3,22 @@ import { httpClient, toQuery, type ApiEnvelope, type ApiPage } from '@/utils/htt
 import { currentMockUserId, mockError, withMock } from '@/services/dataSource';
 import { betCode, getAccount, getDb, nextId, postMovement, saveDb } from '@/mocks/store';
 import { matches as mockMatches } from '@/mocks/data';
-import { matchLabelFor, rememberMatchLabels } from '@/utils/matchLabels';
+import { assertWithinLimits } from '@/mocks/limits';
 
 // Contrato: POST /apuestas, GET /apuestas, GET /apuestas/{id}, POST /apuestas/{id}/cancelar
 
 interface ApiDetalle {
   partido_id: number;
+  partido?: string | null;
+  local?: string | null;
+  visitante?: string | null;
+  local_escudo_url?: string | null;
+  visitante_escudo_url?: string | null;
+  liga?: string | null;
+  fecha_partido?: string | null;
+  estado_partido?: string | null;
+  opcion?: string | null;
+  mercado?: string | null;
   market_id: string;
   selection_code: string;
   etiqueta: string | null;
@@ -32,6 +42,7 @@ const STATUS_FROM_API: Record<string, BetStatus> = {
   GAN: 'won',
   PER: 'lost',
   ANU: 'void',
+  CASH: 'void', // cierre anticipado: sin pantalla propia aún (ver docs/CONTRATOS-API.md)
 };
 export const STATUS_TO_API: Record<BetStatus, string> = { pending: 'PEND', won: 'GAN', lost: 'PER', void: 'ANU' };
 
@@ -62,10 +73,17 @@ function mapApuesta(a: ApiApuesta, userId = ''): Bet {
       matchId: String(d.partido_id),
       marketId: d.market_id,
       selectionCode: d.selection_code,
-      matchLabel: matchLabelFor(String(d.partido_id)),
-      marketName: 'Ganador del partido',
-      selectionLabel: d.etiqueta ?? d.selection_code,
+      matchLabel: d.partido || (d.local && d.visitante ? `${d.local} vs ${d.visitante}` : `Partido #${d.partido_id}`),
+      marketName: d.mercado || 'Mercado',
+      selectionLabel: d.opcion || d.etiqueta || d.selection_code,
       odd: Number(d.cuota),
+      matchDate: d.fecha_partido ?? undefined,
+      homeName: d.local ?? undefined,
+      awayName: d.visitante ?? undefined,
+      homeLogo: d.local_escudo_url || undefined,
+      awayLogo: d.visitante_escudo_url || undefined,
+      leagueName: d.liga ?? undefined,
+      matchStatus: d.estado_partido ?? undefined,
       result: mapResult(d.resultado),
     })),
   };
@@ -89,6 +107,7 @@ function mockPlace(params: PlaceBetParams): Bet[] {
     if (!m || m.status !== 'scheduled' || new Date(m.date).getTime() <= Date.now())
       throw mockError(`El partido ${s.matchLabel} ya no admite apuestas.`);
   });
+  assertWithinLimits(userId, 'stake', totalStake);
   if (totalStake > acc.availableBalance) throw mockError('Saldo insuficiente para esta apuesta.');
 
   return groups.map((legs) => {
@@ -119,7 +138,6 @@ function mockPlace(params: PlaceBetParams): Bet[] {
 export const betsService = {
   /** Registra la apuesta. En modo "single" con N selecciones crea N apuestas simples. */
   async placeBet(params: PlaceBetParams): Promise<Bet[]> {
-    rememberMatchLabels(params.selections.map((s) => ({ id: s.matchId, label: s.matchLabel })));
     return withMock(
       async () => {
         const groups = params.mode === 'single' ? params.selections.map((s) => [s]) : [params.selections];

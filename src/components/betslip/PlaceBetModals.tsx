@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Modal } from '@/components/common/Modal';
+import { LimitLink } from '@/components/common/LimitLink';
 import { Button } from '@/components/common/Button';
 import { useBetSlip } from '@/hooks/useBetSlip';
 import { useWallet } from '@/hooks/useWallet';
@@ -76,6 +77,7 @@ export function PlaceBetModals() {
         {flow.step === 'error' && (
           <p role="alert" className="mt-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
             {flow.message}
+            <LimitLink message={flow.message} onNavigate={close} />
           </p>
         )}
         <div className="mt-5 grid grid-cols-2 gap-3">

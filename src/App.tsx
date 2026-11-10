@@ -23,6 +23,7 @@ import { Retiro } from '@/pages/wallet/Retiro';
 import { Ayuda, Contacto, Cookies, JuegoResponsable, Privacidad, Terminos } from '@/pages/legal/StaticPages';
 import { Login } from '@/pages/auth/Login';
 import { Registro } from '@/pages/auth/Registro';
+import { CompletarPerfil } from '@/pages/auth/CompletarPerfil';
 import { Recuperar } from '@/pages/auth/Recuperar';
 import { RecuperarCodigo } from '@/pages/auth/RecuperarCodigo';
 import { RecuperarNuevaContrasena } from '@/pages/auth/RecuperarNuevaContrasena';
@@ -63,8 +64,10 @@ export default function App() {
                     <Route path="/billetera/recarga" element={<Recarga />} />
                     <Route path="/billetera/recarga/simulador" element={<RecargaSimulador />} />
                     <Route path="/billetera/recarga/resultado" element={<RecargaResultado />} />
+                    <Route path="/pagos/resultado" element={<RecargaResultado />} />
                     <Route path="/billetera/retiro" element={<Retiro />} />
                     <Route path="/perfil" element={<Perfil />} />
+                    <Route path="/completar-perfil" element={<CompletarPerfil />} />
                   </Route>
 
                   {/* Rutas de administración (requieren rol admin) */}

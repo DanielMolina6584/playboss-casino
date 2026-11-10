@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { League, Match } from '@/types';
 import { matchesService } from '@/services/matchesService';
+import { TeamBadge } from '@/components/common/TeamBadge';
 import { MatchCard } from '@/components/match/MatchCard';
 import { MatchCardSkeleton } from '@/components/common/Loading';
 import { ErrorMessage, EmptyState } from '@/components/common/EmptyState';
@@ -237,7 +238,7 @@ export function Apuestas() {
                   {groups.map(({ league, items }) => (
                     <section key={league.id} aria-labelledby={`liga-${league.id}`}>
                       <h2 id={`liga-${league.id}`} className="mb-3 flex items-center gap-2 text-base font-bold text-text-primary">
-                        {league.logo && <img src={league.logo} alt="" className="h-5 w-5 object-contain" />}
+                        <TeamBadge name={league.name} logo={league.logo} size="sm" />
                         {league.name}
                         <span className="text-xs font-medium text-text-secondary">
                           {league.country && `${league.country} · `}
