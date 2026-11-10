@@ -7,6 +7,7 @@ import { Input } from '@/components/common/Input';
 import { PasswordInput } from '@/components/common/PasswordInput';
 import { Button } from '@/components/common/Button';
 import { GoogleSignInButton } from '@/components/auth/GoogleSignInButton';
+import { RecaptchaNotice } from '@/components/auth/RecaptchaNotice';
 import { GOOGLE_BUTTON_AVAILABLE } from '@/config/auth';
 import { isRequired, isValidEmail } from '@/utils/validators';
 
@@ -145,6 +146,8 @@ export function Login() {
             Iniciar sesión
           </Button>
         </form>
+
+        <RecaptchaNotice />
 
         {GOOGLE_BUTTON_AVAILABLE && (
           <div className="mt-5 space-y-4">
