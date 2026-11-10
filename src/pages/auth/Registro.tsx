@@ -7,6 +7,9 @@ import { Input } from '@/components/common/Input';
 import { Select } from '@/components/common/Select';
 import { PasswordInput } from '@/components/common/PasswordInput';
 import { Button } from '@/components/common/Button';
+import { GoogleSignInButton } from '@/components/auth/GoogleSignInButton';
+import { RecaptchaNotice } from '@/components/auth/RecaptchaNotice';
+import { GOOGLE_BUTTON_AVAILABLE } from '@/config/auth';
 import { PhotoPicker, validatePhoto } from '@/components/common/PhotoPicker';
 import { DOCUMENT_TYPES } from '@/constants/documentTypes';
 import {
@@ -31,6 +34,7 @@ const INITIAL_FORM: RegisterPayload = {
   documentType: '',
   documentId: '',
   email: '',
+  phone: '',
   birthDate: '',
   password: '',
   passwordConfirmation: '',
@@ -39,7 +43,7 @@ const INITIAL_FORM: RegisterPayload = {
 };
 
 export function Registro() {
-  const { register } = useAuth();
+  const { register, loginWithGoogle } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
 
@@ -48,6 +52,7 @@ export function Registro() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // Vista previa local; se libera la URL del objeto al cambiar de foto o desmontar.
   function update<K extends keyof RegisterPayload>(key: K, value: RegisterPayload[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
@@ -70,6 +75,7 @@ export function Registro() {
     else if (!isStrongEnough(form.password))
       next.password = 'Usa mínimo 8 caracteres, mayúscula, minúscula, número y símbolo.';
     if (!passwordsMatch(form.password, form.passwordConfirmation)) next.passwordConfirmation = 'Las contraseñas no coinciden.';
+    if (form.phone && !/^[0-9+\s-]{7,20}$/.test(form.phone)) next.phone = 'Ingresa un celular válido (7 a 20 dígitos).';
     if (!form.acceptsTerms) next.acceptsTerms = 'Debes aceptar los términos y la política de privacidad.';
 
     setErrors(next);
@@ -93,6 +99,24 @@ export function Registro() {
     }
   }
 
+  async function handleGoogle(credential: string) {
+    setSubmitError(null);
+    setLoading(true);
+    try {
+      const outcome = await loginWithGoogle(credential);
+      if (outcome === 'mfa') {
+        navigate('/login/verificacion', { replace: true });
+        return;
+      }
+      showToast('¡Cuenta lista!', 'success');
+      navigate(outcome === 'incomplete' ? '/completar-perfil' : '/', { replace: true });
+    } catch (err) {
+      setSubmitError((err as { message?: string })?.message ?? 'No fue posible continuar con Google.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <div
       className="auth-page flex min-h-[calc(100vh-64px)] items-center justify-center px-4 py-8 sm:py-10"
@@ -108,6 +132,15 @@ export function Registro() {
           <h1 className="text-2xl font-bold text-text-primary">Crear cuenta</h1>
           <p className="mt-1 text-sm text-text-secondary">Completa tus datos para comenzar</p>
         </div>
+
+        {GOOGLE_BUTTON_AVAILABLE && (
+          <div className="mb-5 space-y-4">
+            <GoogleSignInButton onCredential={handleGoogle} disabled={loading} />
+            <div className="flex items-center gap-3 text-xs text-text-secondary">
+              <span className="h-px flex-1 bg-border-subtle" />o con tu correo<span className="h-px flex-1 bg-border-subtle" />
+            </div>
+          </div>
+        )}
 
         {submitError && (
           <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
@@ -217,6 +250,18 @@ export function Registro() {
             </FormField>
           </div>
 
+          <FormField label="Celular" htmlFor="phone" error={errors.phone} hint="Opcional">
+            <Input
+              id="phone"
+              type="tel"
+              autoComplete="tel"
+              placeholder="3001234567"
+              value={form.phone ?? ''}
+              onChange={(e) => update('phone', e.target.value)}
+              error={!!errors.phone}
+            />
+          </FormField>
+
           <FormField label="Fecha de nacimiento" htmlFor="birthDate" error={errors.birthDate} required>
             <Input
               id="birthDate"
@@ -267,6 +312,8 @@ export function Registro() {
             Registrarme
           </Button>
         </form>
+
+        <RecaptchaNotice />
 
         <p className="mt-6 text-center text-sm text-text-secondary">
           ¿Ya tienes cuenta?{' '}

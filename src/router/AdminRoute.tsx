@@ -25,5 +25,10 @@ export function AdminRoute() {
     return <Navigate to="/" replace />;
   }
 
+  // Un admin sin 2FA no puede usar el panel: se le lleva a activarlo (la API responde 403 mfa_requerido).
+  if (user.mfaRequired && !user.mfaActive) {
+    return <Navigate to="/perfil#seguridad" replace state={{ mfaRequired: true }} />;
+  }
+
   return <Outlet />;
 }

@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import type { Bet } from '@/types';
+import { TeamBadge } from '@/components/common/TeamBadge';
 import { BetStatusBadge, ResultLabel } from '@/components/bets/BetParts';
 import { formatCurrency, formatDateTime, formatOdd } from '@/utils/formatters';
 
@@ -30,7 +31,16 @@ export function BetCard({ bet, onCancel, detailed }: BetCardProps) {
         {bet.selections.map((s) => (
           <li key={s.id} className="flex items-start justify-between gap-3 rounded-lg bg-bg-secondary px-3 py-2.5 text-sm">
             <div className="min-w-0">
-              <p className="truncate text-text-primary">{s.matchLabel}</p>
+              <p className="flex items-center gap-1.5 truncate text-text-primary">
+                {s.homeName && <TeamBadge name={s.homeName} logo={s.homeLogo} size="xs" />}
+                {s.awayName && <TeamBadge name={s.awayName} logo={s.awayLogo} size="xs" />}
+                <span className="truncate">{s.matchLabel}</span>
+              </p>
+              {(s.leagueName || s.matchDate) && (
+                <p className="truncate text-xs text-text-secondary">
+                  {[s.leagueName, s.matchDate ? formatDateTime(s.matchDate) : null].filter(Boolean).join(' · ')}
+                </p>
+              )}
               <p className="text-xs text-text-secondary">
                 {s.marketName}: <span className="text-text-primary">{s.selectionLabel}</span>
               </p>

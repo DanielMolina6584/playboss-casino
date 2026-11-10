@@ -2,6 +2,7 @@ import type { PaymentMethodCode, PaymentStatus, PaymentTransaction, WompiCheckou
 import { httpClient, type ApiEnvelope } from '@/utils/httpClient';
 import { currentMockUserId, mockError, withMock } from '@/services/dataSource';
 import { getDb, postMovement, saveDb } from '@/mocks/store';
+import { assertWithinLimits } from '@/mocks/limits';
 
 // Contrato: POST /pagos/depositos, GET /pagos/{referencia} (docs/CONTRATOS-API.md)
 
@@ -14,6 +15,7 @@ interface ApiCheckout {
   amount_in_cents: number;
   currency: string;
   signature_integrity: string;
+  expiration_time?: string | null;
   redirect_url?: string | null;
   checkout_url?: string;
 }
@@ -65,6 +67,7 @@ export function buildWompiUrl(c: Omit<WompiCheckout, 'checkoutUrl'>): string {
     'signature:integrity': c.signature,
     'redirect-url': redirect,
   });
+  if (c.expirationTime) q.set('expiration-time', c.expirationTime);
   return `${WOMPI_CHECKOUT_URL}?${q.toString()}`;
 }
 
@@ -77,6 +80,7 @@ function mapTransaccion(t: ApiTransaccion): PaymentTransaction {
         amountInCents: c.amount_in_cents,
         currency: c.currency,
         signature: c.signature_integrity,
+        expirationTime: c.expiration_time ?? null,
         redirectUrl: c.redirect_url ?? null,
         checkoutUrl: '',
       }
@@ -143,6 +147,7 @@ export const paymentsService = {
       () => {
         const db = getDb();
         const userId = currentMockUserId();
+        assertWithinLimits(userId, 'deposit', amount);
         const existing = Object.values(db.payments).find((p) => p.userId === userId && p.key === idempotencyKey);
         if (existing) return existing;
         const reference = `PB-DEP-${Date.now().toString(36).toUpperCase()}`;

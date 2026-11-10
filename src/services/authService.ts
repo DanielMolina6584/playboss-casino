@@ -1,4 +1,6 @@
 import type {
+  CompleteProfilePayload,
+  MfaChallenge,
   ForgotPasswordPayload,
   LoginPayload,
   RegisterPayload,
@@ -6,9 +8,12 @@ import type {
   User,
   VerifyCodePayload,
 } from '@/types';
+import { getRecaptchaToken } from '@/utils/recaptcha';
+import { MOCK_GOOGLE_CREDENTIAL } from '@/config/auth';
 import { getAccessToken, httpClient, setAccessToken, type ApiEnvelope } from '@/utils/httpClient';
-import { isMockActive, isMockToken, mockError, mockToken, mockUserIdFromToken, withMock } from '@/services/dataSource';
-import { findUserByEmail, getDb, MOCK_RECOVERY_CODE, nextId, saveDb } from '@/mocks/store';
+import { currentMockUserId, isMockActive, isMockToken, mockError, mockToken, mockUserIdFromToken, withMock } from '@/services/dataSource';
+import { findUserByEmail, getDb, MOCK_RECOVERY_CODE, nextId, saveDb, type MockUserRecord } from '@/mocks/store';
+import { decorateUser, mockCompleteChallenge, mockMfaActive, mockStartChallenge } from '@/mocks/mfa';
 
 // ---------------------------------------------------------------------------
 // Conectado a la API real de playboss (Laravel + Sanctum), con caída a mock
@@ -21,18 +26,47 @@ export interface ApiUsuario {
   id_usuario: number;
   primer_nombre: string;
   segundo_nombre: string | null;
-  primer_apellido: string;
+  primer_apellido: string | null;
   segundo_apellido: string | null;
-  tipo_documento_codigo: string;
-  numero_documento: string;
+  tipo_documento_codigo: string | null;
+  numero_documento: string | null;
   rol_codigo: string;
   correo: string;
   celular: string | null;
-  fecha_nacimiento: string;
+  fecha_nacimiento: string | null;
   estado_codigo: string;
   fecha_registro: string;
+  foto_url?: string | null;
+  auth_proveedor?: 'LOCAL' | 'GOOGLE';
+  perfil_completo?: boolean;
+  mfa_activo?: boolean;
+  mfa_obligatorio?: boolean;
   foto_drive_id?: string | null;
 }
+
+/** Respuesta de login/Google con 2FA activo: no trae token de API, solo el reto de segundo paso. */
+interface ApiMfaReto {
+  mfa_required: true;
+  mfa_token: string;
+  expira_en: number;
+}
+
+export type LoginOutcome = { kind: 'ok'; user: User } | { kind: 'mfa'; challenge: MfaChallenge };
+export type GoogleOutcome = { kind: 'ok'; user: User; profileIncomplete: boolean } | { kind: 'mfa'; challenge: MfaChallenge };
+
+export interface MfaVerifyResult {
+  user: User;
+  profileIncomplete: boolean;
+  factor: 'totp' | 'recuperacion';
+  recoveryRemaining: number;
+}
+
+const toChallenge = (r: ApiMfaReto, via: MfaChallenge['via'], isNew?: boolean): MfaChallenge => ({
+  token: r.mfa_token,
+  expiresAt: Date.now() + r.expira_en * 1000,
+  via,
+  isNew,
+});
 
 export function mapUsuarioToUser(usuario: ApiUsuario): User {
   const nombres = [usuario.primer_nombre, usuario.segundo_nombre].filter(Boolean).join(' ');
@@ -43,35 +77,71 @@ export function mapUsuarioToUser(usuario: ApiUsuario): User {
     fullName: [nombres, apellidos].filter(Boolean).join(' '),
     firstName: usuario.primer_nombre,
     middleName: usuario.segundo_nombre ?? undefined,
-    lastName: usuario.primer_apellido,
+    lastName: usuario.primer_apellido ?? '',
     secondLastName: usuario.segundo_apellido ?? undefined,
     email: usuario.correo,
-    documentId: usuario.numero_documento,
+    documentId: usuario.numero_documento ?? '',
     birthDate: (usuario.fecha_nacimiento ?? '').slice(0, 10),
     createdAt: usuario.fecha_registro,
     role: usuario.rol_codigo === 'ADMIN' ? 'admin' : 'user',
     phone: usuario.celular ?? undefined,
+    profileComplete: usuario.perfil_completo ?? true,
+    authProvider: usuario.auth_proveedor === 'GOOGLE' ? 'google' : 'local',
+    photoUrl: usuario.foto_url ?? undefined,
     photoId: usuario.foto_drive_id ?? undefined,
+    documentType: usuario.tipo_documento_codigo ?? undefined,
+    mfaActive: usuario.mfa_activo ?? false,
+    mfaRequired: usuario.mfa_obligatorio ?? false,
   };
 }
 
+/** En mock: entiende la credencial simulada o un id_token real de Google (solo lee el payload, sin verificar). */
+function decodeMockGoogle(credential: string): { email: string; firstName: string; lastName: string } {
+  if (credential !== MOCK_GOOGLE_CREDENTIAL) {
+    try {
+      const payload = JSON.parse(atob(credential.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))) as {
+        email?: string;
+        given_name?: string;
+        family_name?: string;
+        name?: string;
+      };
+      if (payload.email) {
+        return {
+          email: payload.email.toLowerCase(),
+          firstName: payload.given_name ?? payload.name ?? payload.email.split('@')[0],
+          lastName: payload.family_name ?? '',
+        };
+      }
+    } catch {
+      /* credencial no decodificable: se usa la simulada */
+    }
+  }
+  return { email: 'google.demo@playboss.co', firstName: 'Google', lastName: 'Demo' };
+}
+
 export const authService = {
-  login(payload: LoginPayload): Promise<User> {
-    return withMock(
+  login(payload: LoginPayload): Promise<LoginOutcome> {
+    return withMock<LoginOutcome>(
       async () => {
-        const res = await httpClient.post<ApiEnvelope<{ usuario: ApiUsuario; token: string }>>(
+        const res = await httpClient.post<ApiEnvelope<{ usuario: ApiUsuario; token: string } | ApiMfaReto>>(
           '/auth/login',
-          { correo: payload.email, contrasena: payload.password },
+          { correo: payload.email, contrasena: payload.password, recaptcha_token: await getRecaptchaToken('login') },
           { auth: false },
         );
+        if ('mfa_required' in res.data) return { kind: 'mfa', challenge: toChallenge(res.data, 'password') };
         setAccessToken(res.data.token);
-        return mapUsuarioToUser(res.data.usuario);
+        return { kind: 'ok', user: mapUsuarioToUser(res.data.usuario) };
       },
       () => {
         const rec = findUserByEmail(payload.email);
         if (!rec || rec.password !== payload.password) throw mockError('Correo o contraseña incorrectos.', 401);
+        if (rec.status !== 'ACT') throw mockError('Tu cuenta no está activa. Contacta a soporte.', 403);
+        if (mockMfaActive(rec.user.id)) {
+          const c = mockStartChallenge(rec.user.id, 'password');
+          return { kind: 'mfa', challenge: { token: c.token, expiresAt: Date.now() + c.expiresIn * 1000, via: 'password' } };
+        }
         setAccessToken(mockToken(rec.user.id));
-        return rec.user;
+        return { kind: 'ok', user: decorateUser(rec.user) };
       },
     );
   },
@@ -79,9 +149,9 @@ export const authService = {
   register(payload: RegisterPayload): Promise<User> {
     return withMock(
       async () => {
-        // multipart/form-data porque incluye la foto de perfil (se guarda en Google Drive).
+        // El API exige multipart/form-data porque `foto` es un archivo obligatorio.
         const form = new FormData();
-        const campos: Record<string, string | undefined> = {
+        const fields: Record<string, string | undefined> = {
           primer_nombre: payload.firstName,
           segundo_nombre: payload.middleName,
           primer_apellido: payload.lastName,
@@ -89,15 +159,17 @@ export const authService = {
           tipo_documento_codigo: payload.documentType,
           numero_documento: payload.documentId,
           correo: payload.email,
+          celular: payload.phone,
           fecha_nacimiento: payload.birthDate,
           contrasena: payload.password,
           contrasena_confirmation: payload.passwordConfirmation,
+          recaptcha_token: await getRecaptchaToken('registro'),
         };
-        Object.entries(campos).forEach(([k, v]) => {
+        Object.entries(fields).forEach(([k, v]) => {
           if (v) form.append(k, v);
         });
         if (payload.photo) form.append('foto', payload.photo);
-        const res = await httpClient.postForm<ApiEnvelope<{ usuario: ApiUsuario; token: string }>>('/auth/registro', form, {
+        const res = await httpClient.post<ApiEnvelope<{ usuario: ApiUsuario; token: string }>>('/auth/registro', form, {
           auth: false,
         });
         setAccessToken(res.data.token);
@@ -120,14 +192,126 @@ export const authService = {
             .join(' '),
           email: payload.email.trim().toLowerCase(),
           documentId: payload.documentId,
+          documentType: payload.documentType,
+          phone: payload.phone || undefined,
           birthDate: payload.birthDate,
           createdAt: new Date().toISOString(),
           role: 'user',
         };
-        db.users.push({ user, password: payload.password });
+        db.users.push({ user, password: payload.password, status: 'ACT' });
         saveDb();
         setAccessToken(mockToken(id));
         return user;
+      },
+    );
+  },
+
+  /** Inicio de sesión / registro con Google. `credential` es el id_token de Google Identity Services. */
+  loginWithGoogle(credential: string): Promise<GoogleOutcome> {
+    return withMock<GoogleOutcome>(
+      async () => {
+        const res = await httpClient.post<
+          ApiEnvelope<{ usuario: ApiUsuario; token: string; perfil_incompleto: boolean } | ApiMfaReto>
+        >('/auth/google', { credential }, { auth: false });
+        if ('mfa_required' in res.data) return { kind: 'mfa', challenge: toChallenge(res.data, 'google') };
+        setAccessToken(res.data.token);
+        return { kind: 'ok', user: mapUsuarioToUser(res.data.usuario), profileIncomplete: res.data.perfil_incompleto };
+      },
+      () => {
+        const g = decodeMockGoogle(credential);
+        const db = getDb();
+        let rec = findUserByEmail(g.email);
+        if (!rec) {
+          const id = String(nextId(db));
+          const user: User = {
+            id,
+            firstName: g.firstName,
+            lastName: g.lastName,
+            fullName: [g.firstName, g.lastName].filter(Boolean).join(' '),
+            email: g.email,
+            documentId: '',
+            birthDate: '',
+            createdAt: new Date().toISOString(),
+            role: 'user',
+            profileComplete: false,
+            authProvider: 'google',
+          };
+          const created: MockUserRecord = { user, password: '', status: 'ACT' };
+          rec = created;
+          db.users.push(created);
+          saveDb();
+        }
+        if (mockMfaActive(rec.user.id)) {
+          const c = mockStartChallenge(rec.user.id, 'google');
+          return { kind: 'mfa', challenge: { token: c.token, expiresAt: Date.now() + c.expiresIn * 1000, via: 'google' } };
+        }
+        setAccessToken(mockToken(rec.user.id));
+        return { kind: 'ok', user: decorateUser(rec.user), profileIncomplete: rec.user.profileComplete === false };
+      },
+    );
+  },
+
+  /** Segundo paso del login: canjea el reto + código de la app (o de recuperación) por la sesión real. */
+  verifyMfa(challenge: MfaChallenge, input: { code?: string; recoveryCode?: string }): Promise<MfaVerifyResult> {
+    return withMock<MfaVerifyResult>(
+      async () => {
+        const res = await httpClient.post<
+          ApiEnvelope<{ usuario: ApiUsuario; token: string; factor: 'totp' | 'recuperacion'; recuperacion_restantes: number; perfil_incompleto?: boolean }>
+        >(
+          '/auth/mfa/verificar',
+          { mfa_token: challenge.token, ...(input.code ? { codigo: input.code } : { codigo_recuperacion: input.recoveryCode }) },
+          { auth: false },
+        );
+        setAccessToken(res.data.token);
+        return {
+          user: mapUsuarioToUser(res.data.usuario),
+          profileIncomplete: res.data.perfil_incompleto === true,
+          factor: res.data.factor,
+          recoveryRemaining: res.data.recuperacion_restantes,
+        };
+      },
+      async () => {
+        const r = await mockCompleteChallenge(challenge.token, input.code, input.recoveryCode);
+        const rec = getDb().users.find((u) => u.user.id === r.userId);
+        if (!rec) throw mockError('La verificación venció o es inválida. Inicia sesión de nuevo.', 401);
+        setAccessToken(mockToken(rec.user.id));
+        return { user: decorateUser(rec.user), profileIncomplete: rec.user.profileComplete === false, factor: r.factor, recoveryRemaining: r.recoveryRemaining };
+      },
+    );
+  },
+
+  /** Completa fecha de nacimiento y documento de un usuario creado con Google. */
+  completeGoogleProfile(payload: CompleteProfilePayload): Promise<User> {
+    return withMock(
+      async () => {
+        const res = await httpClient.put<ApiEnvelope<{ usuario: ApiUsuario }>>('/auth/google/completar', {
+          primer_apellido: payload.lastName,
+          segundo_apellido: payload.secondLastName || null,
+          tipo_documento_codigo: payload.documentType,
+          numero_documento: payload.documentId,
+          fecha_nacimiento: payload.birthDate,
+          celular: payload.phone || null,
+        });
+        return mapUsuarioToUser(res.data.usuario);
+      },
+      () => {
+        const db = getDb();
+        const rec = db.users.find((u) => u.user.id === currentMockUserId());
+        if (!rec) throw mockError('Tu sesión ha expirado. Inicia sesión nuevamente.', 401);
+        if (rec.user.profileComplete !== false) throw mockError('Tu perfil ya está completo.', 409);
+        if (db.users.some((u) => u.user.id !== rec.user.id && u.user.documentId === payload.documentId))
+          throw mockError('Ya existe una cuenta con ese documento.');
+        Object.assign(rec.user, {
+          lastName: payload.lastName,
+          secondLastName: payload.secondLastName || undefined,
+          fullName: [rec.user.firstName, payload.lastName, payload.secondLastName].filter(Boolean).join(' '),
+          documentId: payload.documentId,
+          birthDate: payload.birthDate,
+          phone: payload.phone || undefined,
+          profileComplete: true,
+        });
+        saveDb();
+        return rec.user;
       },
     );
   },
@@ -154,7 +338,8 @@ export const authService = {
 
     if (isMockToken(token)) {
       const id = mockUserIdFromToken(token);
-      return getDb().users.find((u) => u.user.id === id)?.user ?? null;
+      const found = getDb().users.find((u) => u.user.id === id)?.user;
+      return found ? decorateUser(found) : null;
     }
 
     try {
@@ -173,7 +358,7 @@ export const authService = {
   forgotPassword(payload: ForgotPasswordPayload): Promise<{ sent: boolean }> {
     return withMock(
       async () => {
-        await httpClient.post('/auth/recuperar', { correo: payload.email }, { auth: false });
+        await httpClient.post('/auth/recuperar', { correo: payload.email, recaptcha_token: await getRecaptchaToken('recuperar') }, { auth: false });
         return { sent: true };
       },
       () => {
@@ -206,6 +391,7 @@ export const authService = {
             codigo: payload.code,
             contrasena: payload.password,
             contrasena_confirmation: payload.passwordConfirmation,
+            recaptcha_token: await getRecaptchaToken('restablecer'),
           },
           { auth: false },
         );

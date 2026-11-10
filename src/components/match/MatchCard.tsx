@@ -30,6 +30,11 @@ export function MatchCard({ match }: { match: Match }) {
       selectionLabel: selectionLabel(match, odd),
       odd: odd.value,
       matchDate: match.date,
+      homeName: match.homeTeam.name,
+      awayName: match.awayTeam.name,
+      homeLogo: match.homeTeam.logo,
+      awayLogo: match.awayTeam.logo,
+      leagueName: match.league.name,
     });
     if (result === 'max') showToast(`Tu cupón admite máximo ${LIMITS.maxSelections} selecciones.`, 'error');
     if (result === 'replaced') showToast('Reemplazamos tu selección anterior de este partido.', 'info');
@@ -39,7 +44,7 @@ export function MatchCard({ match }: { match: Match }) {
     <article className="card-surface animate-fade-in p-4" aria-label={label}>
       <div className="mb-3 flex items-center justify-between gap-2 text-xs text-text-secondary">
         <span className="flex min-w-0 items-center gap-1.5 font-semibold text-text-primary">
-          {match.league.logo && <img src={match.league.logo} alt="" className="h-4 w-4 shrink-0 object-contain" />}
+          <TeamBadge name={match.league.name} logo={match.league.logo} size="xs" />
           <span className="truncate">{match.league.name}</span>
         </span>
         {match.status === 'live' ? (

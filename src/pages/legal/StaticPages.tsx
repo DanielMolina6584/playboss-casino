@@ -5,6 +5,7 @@ import { FormField } from '@/components/common/FormField';
 import { Input } from '@/components/common/Input';
 import { Button } from '@/components/common/Button';
 import { useToast } from '@/hooks/useToast';
+import { contactService } from '@/services/contactService';
 import { isRequired, isValidEmail } from '@/utils/validators';
 import { LIMITS } from '@/config/limits';
 import { formatCurrency } from '@/utils/formatters';
@@ -127,7 +128,8 @@ export function JuegoResponsable() {
   );
 }
 
-const FAQ = [
+// Función (no constante de módulo): LIMITS se rellena desde la API antes del primer render.
+const getFaq = () => [
   ['¿Cómo recargo saldo?', 'Ve a Billetera → Recargar, elige el monto y paga con tarjeta, Nequi o PSE a través de Wompi. El saldo se acredita al aprobarse el pago.'],
   ['¿Cuál es el monto mínimo para apostar?', `${formatCurrency(LIMITS.minStake)} por apuesta. Para recargar, ${formatCurrency(LIMITS.minDeposit)}.`],
   ['¿Qué es una apuesta combinada?', 'Reúne varias selecciones en un solo boleto: las cuotas se multiplican y debes acertar todas para ganar.'],
@@ -141,7 +143,7 @@ export function Ayuda() {
     <div className="container-page max-w-3xl py-8">
       <PageHeader title="Ayuda y preguntas frecuentes" description="Respuestas rápidas a las dudas más comunes." />
       <div className="space-y-3">
-        {FAQ.map(([q, a]) => (
+        {getFaq().map(([q, a]) => (
           <details key={q} className="card-surface group p-4">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-text-primary">
               {q}
@@ -160,7 +162,8 @@ export function Ayuda() {
 
 export function Contacto() {
   const { showToast } = useToast();
-  const [form, setForm] = useState({ name: '', email: '', message: '' });
+  const [form, setForm] = useState({ name: '', email: '', subject: '', message: '' });
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -172,14 +175,25 @@ export function Contacto() {
     const next: Record<string, string> = {};
     if (!isRequired(form.name)) next.name = 'Ingresa tu nombre.';
     if (!isValidEmail(form.email)) next.email = 'Ingresa un correo válido.';
+    if (form.name.trim().length > 100) next.name = 'Máximo 100 caracteres.';
+    if (form.subject.trim().length < 3) next.subject = 'El asunto debe tener al menos 3 caracteres.';
+    else if (form.subject.trim().length > 150) next.subject = 'Máximo 150 caracteres.';
     if (form.message.trim().length < 10) next.message = 'Cuéntanos un poco más (mínimo 10 caracteres).';
+    else if (form.message.trim().length > 2000) next.message = 'Máximo 2000 caracteres.';
     setErrors(next);
     if (Object.keys(next).length) return;
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 600)); // sin endpoint de contacto todavía (ver docs/CONTRATOS-API.md)
-    setLoading(false);
-    setSent(true);
-    showToast('Mensaje enviado. Te responderemos pronto.', 'success');
+    setSubmitError(null);
+    try {
+      await contactService.send({ name: form.name.trim(), email: form.email.trim(), subject: form.subject.trim(), message: form.message.trim() });
+      setSent(true);
+      showToast('Mensaje enviado. Te responderemos pronto.', 'success');
+    } catch (err) {
+      // 422 (validación), 429 (demasiados intentos) y 503 (no se pudo guardar/enviar) traen su mensaje en español.
+      setSubmitError((err as { message?: string })?.message ?? 'No pudimos enviar tu mensaje. Intenta más tarde.');
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -200,9 +214,13 @@ export function Contacto() {
             <FormField label="Correo electrónico" htmlFor="c-email" error={errors.email} required>
               <Input id="c-email" type="email" value={form.email} onChange={set('email')} error={!!errors.email} />
             </FormField>
+            <FormField label="Asunto" htmlFor="c-subject" error={errors.subject} required>
+              <Input id="c-subject" maxLength={150} value={form.subject} onChange={set('subject')} error={!!errors.subject} />
+            </FormField>
             <FormField label="Mensaje" htmlFor="c-msg" error={errors.message} required>
               <textarea id="c-msg" rows={5} value={form.message} onChange={set('message')} className={`input-base ${errors.message ? 'input-error' : ''}`} />
             </FormField>
+            {submitError && <p role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">{submitError}</p>}
             <Button type="submit" fullWidth loading={loading}>Enviar mensaje</Button>
           </form>
         )}

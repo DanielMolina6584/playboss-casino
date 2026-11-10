@@ -16,8 +16,45 @@ export interface User {
   middleName?: string;
   lastName?: string;
   secondLastName?: string;
+  /** false = usuario creado con Google que aún debe completar fecha de nacimiento y documento. */
+  profileComplete?: boolean;
+  authProvider?: 'local' | 'google';
+  photoUrl?: string;
+  /** Código de documento (CC, CE...). */
+  documentType?: string;
+  /** Autenticación en dos pasos activa. */
+  mfaActive?: boolean;
+  /** Su rol exige 2FA (admin): sin él no puede usar el panel ni retirar. */
+  mfaRequired?: boolean;
   /** Id de la foto de perfil en Google Drive (se descarga con GET /perfil/foto). */
   photoId?: string;
+}
+
+export interface MfaStatus {
+  enabled: boolean;
+  active: boolean;
+  required: boolean;
+  setupPending: boolean;
+  recoveryRemaining: number;
+  confirmedAt: string | null;
+  issuer: string;
+  hasPassword: boolean;
+}
+
+export interface MfaSetup {
+  secret: string;
+  otpauthUri: string;
+  issuer: string;
+  account: string;
+}
+
+/** Reto de segundo paso tras validar contraseña o Google. */
+export interface MfaChallenge {
+  token: string;
+  expiresAt: number;
+  via: 'password' | 'google';
+  /** Solo Google: el usuario es nuevo. */
+  isNew?: boolean;
 }
 
 export interface Sport {
@@ -31,14 +68,15 @@ export interface League {
   slug: string;
   name: string;
   country: string;
+  /** URL pública del logo (logo_url de la API). */
   logo?: string;
-  driveFileId?: string;
   active: boolean;
 }
 
 export interface Team {
   id: string;
   name: string;
+  /** URL pública del escudo (escudo_url de la API). */
   logo?: string;
   driveFileId?: string;
 }
@@ -99,6 +137,13 @@ export interface BetSelection {
   selectionLabel: string; // "Barcelona"
   odd: number;
   matchDate?: string;
+  /** Datos del partido que entrega la API en cada selección de una apuesta. */
+  homeName?: string;
+  awayName?: string;
+  homeLogo?: string;
+  awayLogo?: string;
+  leagueName?: string;
+  matchStatus?: string;
 }
 
 /** single: una apuesta por selección · combo: una sola apuesta con cuotas multiplicadas. */
@@ -148,6 +193,9 @@ export interface Account {
 export type AccountMovementType =
   | 'deposit'
   | 'withdrawal'
+  | 'withdrawal_reserved'
+  | 'withdrawal_paid'
+  | 'withdrawal_released'
   | 'bet_reserved'
   | 'bet_released'
   | 'bet_lost'
@@ -190,6 +238,8 @@ export interface WompiCheckout {
   amountInCents: number;
   currency: string;
   signature: string;
+  /** Epoch/ISO de expiración del checkout (parámetro expiration-time), si la API lo envía. */
+  expirationTime?: string | null;
   redirectUrl?: string | null;
   /** URL final de la pasarela (Wompi Web Checkout o simulador interno en modo mock). */
   checkoutUrl: string;
@@ -208,19 +258,93 @@ export interface PaymentTransaction {
   simulated?: boolean;
 }
 
+export type WithdrawalStatus = 'pending' | 'paid' | 'rejected';
+export type BankAccountType = 'AHORROS' | 'CORRIENTE' | 'NEQUI' | 'DAVIPLATA';
+
 export interface WithdrawalRequest {
   id: string;
   amount: number;
-  bankAccount: string;
-  status: 'requested';
-  createdAt: string;
-  simulated: true;
+  currency: string;
+  status: WithdrawalStatus;
+  bank: string;
+  accountType: BankAccountType;
+  /** Enmascarado para el cliente (****7890); completo solo en la vista admin. */
+  accountNumber: string;
+  holder: string;
+  /** Solo en la vista admin. */
+  holderDocument?: string;
+  rejectionReason?: string | null;
+  requestedAt: string;
+  resolvedAt?: string | null;
+  /** Solo vista admin. */
+  userId?: string;
+}
+
+export interface WithdrawalPayload {
+  amount: number;
+  bank: string;
+  accountType: BankAccountType;
+  accountNumber: string;
+  holder: string;
+  holderDocument: string;
+  idempotencyKey: string;
+  /** Código de 2FA (TOTP o de recuperación); obligatorio si el usuario tiene 2FA activo. */
+  mfaCode?: string;
+}
+
+export type LimitType = 'deposit' | 'stake';
+export type LimitPeriod = 'daily' | 'weekly' | 'monthly';
+export type LimitKey = `${LimitType}_${LimitPeriod}`;
+
+export interface LimitUsage {
+  limit: number | null;
+  used: number;
+  available: number | null;
 }
 
 export interface ResponsibleLimits {
-  dailyDeposit: number | null;
-  weeklyDeposit: number | null;
-  dailyStake: number | null;
+  limits: Record<LimitKey, number | null>;
+  usage: Partial<Record<LimitKey, LimitUsage>>;
+  selfExclusion: { active: boolean; until: string | null };
+}
+
+export type SelfExclusionDays = 1 | 7 | 30 | 90 | 180 | 365;
+
+/** Límites de negocio publicados por GET /configuracion/limites. */
+export interface BusinessLimits {
+  currency: string;
+  minStake: number;
+  maxStake: number;
+  maxSelections: number;
+  minAge: number;
+  dailyStakeCap: number;
+  maxBetsPerDay: number;
+  minDeposit: number;
+  maxDeposit: number;
+  minWithdrawal: number;
+  maxWithdrawal: number;
+  maxPendingWithdrawals: number;
+}
+
+export type UserStatus = 'ACT' | 'BLQ' | 'SUS';
+
+export interface AdminUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  status: UserStatus;
+  documentType: string;
+  /** Enmascarado por la API. */
+  documentNumber: string;
+  registeredAt: string;
+}
+
+export interface ContactPayload {
+  name: string;
+  email: string;
+  subject: string;
+  message: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -246,12 +370,22 @@ export interface RegisterPayload {
   documentType: string;
   documentId: string;
   email: string;
+  phone?: string;
   birthDate: string;
   password: string;
   passwordConfirmation: string;
   acceptsTerms: boolean;
-  /** Foto de perfil obligatoria; la API la guarda en Google Drive. */
+  /** Foto de perfil: obligatoria en la API (multipart; jpg, png o webp; máx. 3 MB). */
   photo: File | null;
+}
+
+export interface CompleteProfilePayload {
+  lastName: string;
+  secondLastName?: string;
+  documentType: string;
+  documentId: string;
+  birthDate: string;
+  phone?: string;
 }
 
 export interface ForgotPasswordPayload {
@@ -280,6 +414,12 @@ export interface ApiError {
   status: number;
   message: string;
   errors?: Record<string, string[]>;
+  /** Segundos sugeridos por la API antes de reintentar (429). */
+  retryAfter?: number;
   /** La API no está accesible (sin red / no desplegada): habilita el fallback a mock. */
   unavailable?: boolean;
+  /** 403 `data.mfa_requerido`: el rol exige activar el 2FA antes de continuar. */
+  mfaRequired?: boolean;
+  /** 403 `data.mfa_codigo_requerido`: la operación exige un código de 2FA. */
+  mfaCodeRequired?: boolean;
 }

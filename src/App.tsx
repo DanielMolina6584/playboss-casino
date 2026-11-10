@@ -24,9 +24,12 @@ import { Retiro } from '@/pages/wallet/Retiro';
 import { Ayuda, Contacto, Cookies, JuegoResponsable, Privacidad, Terminos } from '@/pages/legal/StaticPages';
 import { Login } from '@/pages/auth/Login';
 import { Registro } from '@/pages/auth/Registro';
+import { CompletarPerfil } from '@/pages/auth/CompletarPerfil';
 import { Recuperar } from '@/pages/auth/Recuperar';
 import { RecuperarCodigo } from '@/pages/auth/RecuperarCodigo';
 import { RecuperarNuevaContrasena } from '@/pages/auth/RecuperarNuevaContrasena';
+import { VerificacionDosPasos } from '@/pages/auth/VerificacionDosPasos';
+import { MfaRequiredListener } from '@/router/MfaRequiredListener';
 
 export default function App() {
   return (
@@ -35,6 +38,7 @@ export default function App() {
         <ToastProvider>
           <WalletProvider>
             <BetSlipProvider>
+              <MfaRequiredListener />
               <Routes>
                 <Route element={<AppLayout />}>
                   {/* Rutas públicas */}
@@ -51,6 +55,7 @@ export default function App() {
                   {/* Rutas solo para invitados */}
                   <Route element={<PublicOnlyRoute />}>
                     <Route path="/login" element={<Login />} />
+                    <Route path="/login/verificacion" element={<VerificacionDosPasos />} />
                     <Route path="/registro" element={<Registro />} />
                     <Route path="/recuperar" element={<Recuperar />} />
                     <Route path="/recuperar/codigo" element={<RecuperarCodigo />} />
@@ -65,8 +70,10 @@ export default function App() {
                     <Route path="/billetera/recarga" element={<Recarga />} />
                     <Route path="/billetera/recarga/simulador" element={<RecargaSimulador />} />
                     <Route path="/billetera/recarga/resultado" element={<RecargaResultado />} />
+                    <Route path="/pagos/resultado" element={<RecargaResultado />} />
                     <Route path="/billetera/retiro" element={<Retiro />} />
                     <Route path="/perfil" element={<Perfil />} />
+                    <Route path="/completar-perfil" element={<CompletarPerfil />} />
                   </Route>
 
                   {/* Rutas de administración (requieren rol admin) */}

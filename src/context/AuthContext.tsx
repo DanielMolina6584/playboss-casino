@@ -1,14 +1,22 @@
 import { createContext, useCallback, useEffect, useState, type ReactNode } from 'react';
-import type { LoginPayload, RegisterPayload, User } from '@/types';
-import { authService } from '@/services/authService';
+import type { CompleteProfilePayload, LoginPayload, MfaChallenge, RegisterPayload, User } from '@/types';
+import { authService, type MfaVerifyResult } from '@/services/authService';
 
 interface AuthContextValue {
   user: User | null;
   authenticated: boolean;
   loading: boolean;
   error: string | null;
-  login: (payload: LoginPayload) => Promise<void>;
+  /** Reto de segundo paso pendiente (login con 2FA activo); vive solo en memoria. */
+  mfaChallenge: MfaChallenge | null;
+  /** 'mfa' = falta el segundo paso (ver verifyMfa). */
+  login: (payload: LoginPayload) => Promise<'ok' | 'mfa'>;
+  verifyMfa: (input: { code?: string; recoveryCode?: string }) => Promise<MfaVerifyResult>;
+  cancelMfa: () => void;
   register: (payload: RegisterPayload) => Promise<void>;
+  /** 'incomplete' = perfil incompleto (debe completarlo antes de apostar/depositar); 'mfa' = falta el segundo paso. */
+  loginWithGoogle: (credential: string) => Promise<'ok' | 'incomplete' | 'mfa'>;
+  completeProfile: (payload: CompleteProfilePayload) => Promise<void>;
   logout: () => Promise<void>;
   clearError: () => void;
   updateUser: (user: User) => void;
@@ -20,6 +28,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [mfaChallenge, setMfaChallenge] = useState<MfaChallenge | null>(null);
 
   useEffect(() => {
     authService
@@ -46,8 +55,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async (payload: LoginPayload) => {
     setError(null);
     try {
-      const loggedUser = await authService.login(payload);
-      setUser(loggedUser);
+      const out = await authService.login(payload);
+      if (out.kind === 'mfa') {
+        setMfaChallenge(out.challenge);
+        return 'mfa';
+      }
+      setUser(out.user);
+      return 'ok';
     } catch (err) {
       const message = (err as { message?: string })?.message ?? 'No fue posible iniciar sesión.';
       setError(message);
@@ -67,6 +81,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const loginWithGoogle = useCallback(async (credential: string) => {
+    setError(null);
+    try {
+      const result = await authService.loginWithGoogle(credential);
+      if (result.kind === 'mfa') {
+        setMfaChallenge(result.challenge);
+        return 'mfa';
+      }
+      setUser(result.user);
+      return result.profileIncomplete ? 'incomplete' : 'ok';
+    } catch (err) {
+      const message = (err as { message?: string })?.message ?? 'No fue posible iniciar sesión con Google.';
+      setError(message);
+      throw err;
+    }
+  }, []);
+
+  const verifyMfa = useCallback(
+    async (input: { code?: string; recoveryCode?: string }) => {
+      if (!mfaChallenge) throw { status: 401, message: 'La verificación venció. Inicia sesión de nuevo.' };
+      const result = await authService.verifyMfa(mfaChallenge, input);
+      setMfaChallenge(null);
+      setUser(result.user);
+      return result;
+    },
+    [mfaChallenge],
+  );
+
+  const cancelMfa = useCallback(() => setMfaChallenge(null), []);
+
+  const completeProfile = useCallback(async (payload: CompleteProfilePayload) => {
+    setUser(await authService.completeGoogleProfile(payload));
+  }, []);
+
   const logout = useCallback(async () => {
     await authService.logout();
     setUser(null);
@@ -77,7 +125,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, authenticated: !!user, loading, error, login, register, logout, clearError, updateUser }}
+      value={{ user, authenticated: !!user, loading, error, mfaChallenge, login, verifyMfa, cancelMfa, register, loginWithGoogle, completeProfile, logout, clearError, updateUser }}
     >
       {children}
     </AuthContext.Provider>

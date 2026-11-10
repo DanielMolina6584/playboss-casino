@@ -1,6 +1,6 @@
-import { useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
-import type { ResponsibleLimits } from '@/types';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import type { LimitKey, LimitPeriod, LimitType, ResponsibleLimits, SelfExclusionDays } from '@/types';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/useToast';
 import { FormField } from '@/components/common/FormField';
@@ -8,10 +8,17 @@ import { Input } from '@/components/common/Input';
 import { PasswordInput } from '@/components/common/PasswordInput';
 import { Button } from '@/components/common/Button';
 import { PageHeader } from '@/components/common/PageHeader';
+import { Select } from '@/components/common/Select';
+import { Modal } from '@/components/common/Modal';
+import { Loading } from '@/components/common/Loading';
+import { MfaSection } from '@/components/profile/MfaSection';
+import { ErrorMessage } from '@/components/common/EmptyState';
 import { PhotoPicker, validatePhoto } from '@/components/common/PhotoPicker';
 import { useUserPhoto } from '@/components/common/UserAvatar';
 import { userService } from '@/services/userService';
-import { formatAmountInput, formatDate, maskDocumentId, parseAmount } from '@/utils/formatters';
+import { limitsService, SELF_EXCLUSION_OPTIONS, type LimitChanges } from '@/services/limitsService';
+import { LIMIT_KEYS } from '@/mocks/limits';
+import { formatAmountInput, formatCurrency, formatDate, formatDateTime, maskDocumentId, parseAmount } from '@/utils/formatters';
 import { isRequired, isStrongEnough, passwordsMatch } from '@/utils/validators';
 
 function ProfileForm() {
@@ -181,50 +188,164 @@ function PasswordForm() {
   );
 }
 
-function LimitsForm({ userId }: { userId: string }) {
-  const { showToast } = useToast();
-  const [limits, setLimits] = useState<ResponsibleLimits>(() => userService.getLimits(userId));
-  const fields: { key: keyof ResponsibleLimits; label: string }[] = [
-    { key: 'dailyDeposit', label: 'Límite diario de depósito' },
-    { key: 'weeklyDeposit', label: 'Límite semanal de depósito' },
-    { key: 'dailyStake', label: 'Límite diario de apuestas' },
-  ];
+const LIMIT_ROWS: { type: LimitType; title: string }[] = [
+  { type: 'deposit', title: 'Depósitos' },
+  { type: 'stake', title: 'Apuestas' },
+];
+const PERIODS: { period: LimitPeriod; label: string }[] = [
+  { period: 'daily', label: 'Diario' },
+  { period: 'weekly', label: 'Semanal' },
+  { period: 'monthly', label: 'Mensual' },
+];
 
-  function handleSubmit(e: FormEvent) {
-    e.preventDefault();
+function LimitsForm() {
+  const { showToast } = useToast();
+  const [data, setData] = useState<ResponsibleLimits | null>(null);
+  const [values, setValues] = useState<Record<LimitKey, number>>({} as Record<LimitKey, number>);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [days, setDays] = useState<SelfExclusionDays>(7);
+  const [confirmExclusion, setConfirmExclusion] = useState(false);
+
+  const apply = useCallback((r: ResponsibleLimits) => {
+    setData(r);
+    setValues(Object.fromEntries(LIMIT_KEYS.map((k) => [k, r.limits[k] ?? 0])) as Record<LimitKey, number>);
+  }, []);
+
+  const load = useCallback(async () => {
+    setError(null);
     try {
-      userService.saveLimits(userId, limits);
-      showToast('Límites guardados.', 'success');
+      apply(await limitsService.getGameLimits());
+    } catch (err) {
+      setError((err as { message?: string })?.message ?? 'No fue posible cargar tus límites.');
+    }
+  }, [apply]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function save(changes: LimitChanges, okMessage: string) {
+    setSaving(true);
+    try {
+      apply(await limitsService.updateGameLimits(changes));
+      showToast(okMessage, 'success');
     } catch (err) {
       showToast((err as { message?: string }).message ?? 'No fue posible guardar los límites.', 'error');
+    } finally {
+      setSaving(false);
     }
   }
 
+  function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!data) return;
+    // PUT parcial: solo las claves modificadas; 0 / vacío = quitar el límite (null).
+    const changes: LimitChanges = {};
+    LIMIT_KEYS.forEach((k) => {
+      const next = values[k] > 0 ? values[k] : null;
+      if (next !== data.limits[k]) changes[k] = next;
+    });
+    if (!Object.keys(changes).length) {
+      showToast('No hay cambios para guardar.', 'info');
+      return;
+    }
+    save(changes, 'Límites guardados.');
+  }
+
+  if (error) return <ErrorMessage message={error} onRetry={load} />;
+  if (!data) return <div className="flex justify-center py-8"><Loading /></div>;
+
+  const excl = data.selfExclusion;
   return (
-    <form onSubmit={handleSubmit} className="grid gap-4 sm:grid-cols-3">
-      {fields.map((f) => (
-        <FormField key={f.key} label={f.label} htmlFor={`lim-${f.key}`} hint="Vacío = sin límite">
-          <Input
-            id={`lim-${f.key}`}
-            inputMode="numeric"
-            placeholder="Sin límite"
-            value={formatAmountInput(limits[f.key] ?? 0)}
-            onChange={(e) => setLimits((l) => ({ ...l, [f.key]: parseAmount(e.target.value) || null }))}
-          />
-        </FormField>
-      ))}
-      <div className="sm:col-span-3">
-        <p className="mb-3 text-xs text-text-secondary">
-          Por ahora estos límites se guardan solo en este dispositivo. <Link to="/legal/juego-responsable" className="text-gold underline">Conoce más sobre juego responsable</Link>.
+    <div className="space-y-6">
+      {excl.active && (
+        <div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          <strong>Autoexclusión activa</strong> hasta {excl.until ? formatDateTime(excl.until) : 'nueva orden'}. No puedes apostar ni
+          recargar saldo durante este periodo, y no se puede acortar.
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="space-y-5">
+        {LIMIT_ROWS.map((row) => (
+          <fieldset key={row.type} className="grid gap-4 sm:grid-cols-3">
+            <legend className="mb-2 text-sm font-semibold text-text-primary">Límites de {row.title.toLowerCase()}</legend>
+            {PERIODS.map(({ period, label }) => {
+              const key = `${row.type}_${period}` as LimitKey;
+              const u = data.usage[key];
+              return (
+                <FormField key={key} label={label} htmlFor={`lim-${key}`}>
+                  <Input
+                    id={`lim-${key}`}
+                    inputMode="numeric"
+                    placeholder="Sin límite"
+                    value={values[key] ? formatAmountInput(values[key]) : ''}
+                    onChange={(e) => setValues((v) => ({ ...v, [key]: parseAmount(e.target.value) }))}
+                  />
+                  {u && (
+                    <p className="mt-1.5 text-xs text-text-secondary" data-testid={`usage-${key}`}>
+                      Consumido {formatCurrency(u.used)} · Disponible{' '}
+                      <span className="font-semibold text-text-primary">{u.available === null ? 'sin límite' : formatCurrency(u.available)}</span>
+                    </p>
+                  )}
+                </FormField>
+              );
+            })}
+          </fieldset>
+        ))}
+        <p className="text-xs text-text-secondary">
+          Vacío = sin límite. Cada periodo se mide por calendario (día, semana desde el lunes, mes). El semanal no puede ser menor que el diario, ni el mensual que el semanal.{' '}
+          <Link to="/legal/juego-responsable" className="text-gold underline">Conoce más sobre juego responsable</Link>.
         </p>
-        <Button type="submit" variant="secondary">Guardar límites</Button>
+        <Button type="submit" variant="secondary" loading={saving}>Guardar límites</Button>
+      </form>
+
+      <div className="border-t border-border-subtle pt-5">
+        <h3 className="text-sm font-semibold text-text-primary">Autoexclusión</h3>
+        <p className="mt-1 text-sm text-text-secondary">
+          Si necesitas una pausa, bloquea apuestas y recargas por un tiempo. No puedes revertirla ni acortarla.
+        </p>
+        <div className="mt-3 flex flex-wrap items-end gap-3">
+          <div className="min-w-[10rem]">
+            <label htmlFor="excl-days" className="label-base">Duración</label>
+            <Select id="excl-days" value={days} onChange={(e) => setDays(Number(e.target.value) as SelfExclusionDays)}>
+              {SELF_EXCLUSION_OPTIONS.map((o) => (
+                <option key={o.days} value={o.days}>{o.label}</option>
+              ))}
+            </Select>
+          </div>
+          <Button variant="secondary" onClick={() => setConfirmExclusion(true)} disabled={saving}>Autoexcluirme</Button>
+        </div>
       </div>
-    </form>
+
+      <Modal isOpen={confirmExclusion} onClose={() => setConfirmExclusion(false)} title="Confirmar autoexclusión">
+        <p className="text-sm text-text-secondary">
+          Durante <strong className="text-text-primary">{SELF_EXCLUSION_OPTIONS.find((o) => o.days === days)?.label}</strong> no podrás
+          apostar ni recargar. Esta decisión no se puede deshacer.
+        </p>
+        <div className="mt-5 grid grid-cols-2 gap-3">
+          <Button variant="secondary" onClick={() => setConfirmExclusion(false)}>Cancelar</Button>
+          <Button
+            loading={saving}
+            onClick={async () => {
+              await save({ selfExclusionDays: days }, 'Autoexclusión activada.');
+              setConfirmExclusion(false);
+            }}
+          >
+            Sí, autoexcluirme
+          </Button>
+        </div>
+      </Modal>
+    </div>
   );
 }
 
 export function Perfil() {
   const { user, logout } = useAuth();
+  const { hash } = useLocation();
+  useEffect(() => {
+    if (hash) document.getElementById(hash.slice(1))?.scrollIntoView();
+  }, [hash]);
   if (!user) return null;
 
   return (
@@ -255,13 +376,17 @@ export function Perfil() {
             <h2 id="sec-info" className="mb-4 text-lg font-semibold text-text-primary">Información personal</h2>
             <ProfileForm />
           </section>
+          <section id="seguridad" className="card-surface p-5 sm:p-6" aria-labelledby="sec-mfa">
+            <h2 id="sec-mfa" className="mb-4 text-lg font-semibold text-text-primary">Seguridad: verificación en dos pasos</h2>
+            <MfaSection />
+          </section>
           <section className="card-surface p-5 sm:p-6" aria-labelledby="sec-pass">
             <h2 id="sec-pass" className="mb-4 text-lg font-semibold text-text-primary">Cambiar contraseña</h2>
             <PasswordForm />
           </section>
-          <section className="card-surface p-5 sm:p-6" aria-labelledby="sec-lim">
+          <section id="limites" className="card-surface p-5 sm:p-6" aria-labelledby="sec-lim">
             <h2 id="sec-lim" className="mb-4 text-lg font-semibold text-text-primary">Juego responsable: mis límites</h2>
-            <LimitsForm userId={user.id} />
+            <LimitsForm />
           </section>
         </div>
       </div>

@@ -1,7 +1,6 @@
 import type { League, Market, Match, MatchFilters, MatchStatus } from '@/types';
 import { httpClient, toQuery, type ApiEnvelope, type ApiPage } from '@/utils/httpClient';
 import { withMock } from '@/services/dataSource';
-import { rememberMatchLabels } from '@/utils/matchLabels';
 import { leagues as mockLeagues, matches as mockMatches } from '@/mocks/data';
 
 // Contrato: GET /ligas, GET /partidos, GET /partidos/{id}/mercados (docs/CONTRATOS-API.md)
@@ -11,12 +10,13 @@ interface ApiLiga {
   nombre: string;
   pais_codigo?: string;
   pais?: { codigo?: string; nombre?: string } | null;
-  logo_drive_id?: string | null;
+  logo_url?: string | null;
   activa?: boolean;
 }
 interface ApiEquipo {
   id_equipo: number;
   nombre: string;
+  escudo_url?: string | null;
   escudo_drive_id?: string | null;
 }
 interface ApiPartido {
@@ -51,7 +51,7 @@ function mapLiga(l: ApiLiga): League {
     slug: slugify(l.nombre),
     name: l.nombre,
     country: l.pais?.nombre ?? l.pais?.codigo ?? l.pais_codigo ?? '',
-    driveFileId: l.logo_drive_id ?? undefined,
+    logo: l.logo_url || undefined,
     active: l.activa ?? true,
   };
 }
@@ -97,13 +97,13 @@ function mapPartido(p: ApiPartido, markets: Market[]): Match {
     homeTeam: {
       id: String(p.local.id_equipo),
       name: p.local.nombre,
-      logo: escudoUrl(p.local.nombre),
+      logo: p.local.escudo_url || escudoUrl(p.local.nombre),
       driveFileId: p.local.escudo_drive_id ?? undefined,
     },
     awayTeam: {
       id: String(p.visitante.id_equipo),
       name: p.visitante.nombre,
-      logo: escudoUrl(p.visitante.nombre),
+      logo: p.visitante.escudo_url || escudoUrl(p.visitante.nombre),
       driveFileId: p.visitante.escudo_drive_id ?? undefined,
     },
     date: p.fecha_hora,
@@ -114,6 +114,7 @@ function mapPartido(p: ApiPartido, markets: Market[]): Match {
   };
 }
 
+/** Filtra (solo mock) y ordena. Con la API, liga/fechas/texto (q) los filtra el servidor. */
 function applyFilters(list: Match[], f: MatchFilters): Match[] {
   const q = f.q?.trim().toLowerCase();
   const from = f.from ? new Date(`${f.from}T00:00:00`).getTime() : null;
@@ -147,13 +148,14 @@ export const matchesService = {
 
   /** Partidos programados o en juego, con sus mercados, filtrados por liga/fecha/texto. */
   async getMatches(filters: MatchFilters = {}): Promise<Match[]> {
-    const list = await withMock(
+    return withMock(
       async () => {
         const res = await httpClient.get<ApiEnvelope<ApiPage<ApiPartido>>>(
           `/partidos${toQuery({
             estado: 'PROG',
             per_page: 100,
             liga_id: filters.leagueId,
+            q: filters.q?.trim() || undefined,
             desde: filters.from,
             hasta: filters.to,
           })}`,
@@ -171,12 +173,10 @@ export const matchesService = {
             }
           }),
         );
-        return applyFilters(withMarkets, { q: filters.q });
+        return applyFilters(withMarkets, {});
       },
       () => applyFilters(mockMatches, filters),
     );
-    rememberMatchLabels(list.map((m) => ({ id: m.id, label: `${m.homeTeam.name} vs ${m.awayTeam.name}` })));
-    return list;
   },
 
   /** Un partido con todos sus mercados abiertos (GET /partidos/{id} y /partidos/{id}/mercados). */
@@ -191,7 +191,6 @@ export const matchesService = {
       },
       () => mockMatches.find((m) => m.id === matchId),
     );
-    if (match) rememberMatchLabels([{ id: match.id, label: `${match.homeTeam.name} vs ${match.awayTeam.name}` }]);
     return match;
   },
 };
