@@ -5,6 +5,7 @@ import { FormField } from '@/components/common/FormField';
 import { Input } from '@/components/common/Input';
 import { Button } from '@/components/common/Button';
 import { isRequired, isValidEmail } from '@/utils/validators';
+import { RecaptchaNotice } from '@/components/auth/RecaptchaNotice';
 
 export function Recuperar() {
   const navigate = useNavigate();
@@ -87,6 +88,8 @@ export function Recuperar() {
             </Button>
           </form>
         )}
+
+        <RecaptchaNotice />
 
         <p className="mt-6 text-center text-sm">
           <Link to="/login" className="font-medium text-gold hover:text-gold-secondary">

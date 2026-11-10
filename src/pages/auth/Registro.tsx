@@ -8,6 +8,7 @@ import { Select } from '@/components/common/Select';
 import { PasswordInput } from '@/components/common/PasswordInput';
 import { Button } from '@/components/common/Button';
 import { GoogleSignInButton } from '@/components/auth/GoogleSignInButton';
+import { RecaptchaNotice } from '@/components/auth/RecaptchaNotice';
 import { GOOGLE_BUTTON_AVAILABLE } from '@/config/auth';
 import { PhotoPicker, validatePhoto } from '@/components/common/PhotoPicker';
 import { DOCUMENT_TYPES } from '@/constants/documentTypes';
@@ -311,6 +312,8 @@ export function Registro() {
             Registrarme
           </Button>
         </form>
+
+        <RecaptchaNotice />
 
         <p className="mt-6 text-center text-sm text-text-secondary">
           ¿Ya tienes cuenta?{' '}
