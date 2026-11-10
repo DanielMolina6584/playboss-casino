@@ -41,6 +41,7 @@ export interface ApiUsuario {
   perfil_completo?: boolean;
   mfa_activo?: boolean;
   mfa_obligatorio?: boolean;
+  foto_drive_id?: string | null;
 }
 
 /** Respuesta de login/Google con 2FA activo: no trae token de API, solo el reto de segundo paso. */
@@ -87,6 +88,7 @@ export function mapUsuarioToUser(usuario: ApiUsuario): User {
     profileComplete: usuario.perfil_completo ?? true,
     authProvider: usuario.auth_proveedor === 'GOOGLE' ? 'google' : 'local',
     photoUrl: usuario.foto_url ?? undefined,
+    photoId: usuario.foto_drive_id ?? undefined,
     documentType: usuario.tipo_documento_codigo ?? undefined,
     mfaActive: usuario.mfa_activo ?? false,
     mfaRequired: usuario.mfa_obligatorio ?? false,

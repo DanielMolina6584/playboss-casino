@@ -10,6 +10,7 @@ import { AdminRoute } from '@/router/AdminRoute';
 
 import { Home } from '@/pages/Home';
 import { Apuestas } from '@/pages/Apuestas';
+import { PartidoDetalle } from '@/pages/PartidoDetalle';
 import { MisApuestas } from '@/pages/MisApuestas';
 import { BetDetalle } from '@/pages/BetDetalle';
 import { Perfil } from '@/pages/Perfil';
@@ -43,6 +44,7 @@ export default function App() {
                   {/* Rutas públicas */}
                   <Route path="/" element={<Home />} />
                   <Route path="/apuestas" element={<Apuestas />} />
+                  <Route path="/partidos/:id" element={<PartidoDetalle />} />
                   <Route path="/legal/terminos" element={<Terminos />} />
                   <Route path="/legal/privacidad" element={<Privacidad />} />
                   <Route path="/legal/cookies" element={<Cookies />} />
