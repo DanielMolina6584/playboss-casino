@@ -54,6 +54,17 @@ interface MockDb {
   recovery: Record<string, string>;
   limits: Record<string, MockLimitsRecord>;
   withdrawals: MockWithdrawal[];
+  /** 2FA simulado por usuario (opcional: bases guardadas antes de existir esta función no lo traen). */
+  mfa?: Record<string, MockMfa>;
+}
+
+export interface MockMfa {
+  secret: string;
+  confirmedAt: string | null;
+  lastCounter: number | null;
+  recovery: { code: string; used: boolean }[];
+  /** Marcas de tiempo (ms) de los fallos recientes, para el bloqueo de 5 intentos / 5 min. */
+  failures: number[];
 }
 
 export const DEMO_USER = { email: 'demo@playboss.co', password: 'Demo1234!' };

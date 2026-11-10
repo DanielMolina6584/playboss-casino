@@ -129,9 +129,13 @@ export function Registro() {
     setSubmitError(null);
     setLoading(true);
     try {
-      const incomplete = await loginWithGoogle(credential);
+      const outcome = await loginWithGoogle(credential);
+      if (outcome === 'mfa') {
+        navigate('/login/verificacion', { replace: true });
+        return;
+      }
       showToast('¡Cuenta lista!', 'success');
-      navigate(incomplete ? '/completar-perfil' : '/', { replace: true });
+      navigate(outcome === 'incomplete' ? '/completar-perfil' : '/', { replace: true });
     } catch (err) {
       setSubmitError((err as { message?: string })?.message ?? 'No fue posible continuar con Google.');
     } finally {

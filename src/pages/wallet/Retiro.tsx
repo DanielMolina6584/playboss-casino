@@ -16,7 +16,7 @@ import { formatAmountInput, formatCurrency, formatDateTime, parseAmount } from '
 import { LIMITS } from '@/config/limits';
 
 const ACCOUNT_TYPES = Object.keys(accountTypeLabels) as BankAccountType[];
-type Errors = Partial<Record<'amount' | 'bank' | 'accountNumber' | 'holder' | 'holderDocument', string>>;
+type Errors = Partial<Record<'amount' | 'bank' | 'accountNumber' | 'holder' | 'holderDocument' | 'mfaCode', string>>;
 
 const newKey = () =>
   typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `ret-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -34,6 +34,10 @@ export function Retiro() {
   const [errors, setErrors] = useState<Errors>({});
   const [loading, setLoading] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // Con 2FA activo cada retiro exige un código vigente (de la app o de recuperación).
+  const [mfaCode, setMfaCode] = useState('');
+  const [mfaForced, setMfaForced] = useState(false);
+  const needMfa = !!user?.mfaActive || mfaForced;
   // Misma clave mientras se reintenta: el API devuelve la solicitud ya creada en vez de duplicarla.
   const keyRef = useRef<string | null>(null);
 
@@ -68,6 +72,7 @@ export function Retiro() {
     if (!/^\d{6,20}$/.test(accountNumber.replace(/[\s-]/g, ''))) next.accountNumber = 'Entre 6 y 20 dígitos, sin letras.';
     if (holder.trim().length < 3 || holder.trim().length > 120) next.holder = 'Ingresa el nombre del titular (3 a 120 caracteres).';
     if (!/^\d{5,15}$/.test(holderDocument)) next.holderDocument = 'Entre 5 y 15 dígitos, sin puntos ni letras.';
+    if (needMfa && !mfaCode.trim()) next.mfaCode = 'Ingresa el código de tu app autenticadora.';
     return next;
   }
 
@@ -89,8 +94,10 @@ export function Retiro() {
         holder: holder.trim(),
         holderDocument,
         idempotencyKey: keyRef.current,
+        mfaCode: needMfa ? mfaCode.trim() : undefined,
       });
       keyRef.current = null;
+      setMfaCode('');
       showToast('Solicitud de retiro recibida; será revisada por un administrador.', 'success');
       setAmount(0);
       setAccountNumber('');
@@ -98,10 +105,11 @@ export function Retiro() {
       if (page === 1) loadList();
       else setPage(1);
     } catch (err) {
-      const e2 = err as { message?: string; status?: number };
+      const e2 = err as { message?: string; status?: number; mfaCodeRequired?: boolean };
+      if (e2.mfaCodeRequired) setMfaForced(true);
       setSubmitError(e2.message ?? 'No fue posible registrar la solicitud.');
       // 422/409 son definitivos: una nueva edición debe usar clave nueva.
-      if (e2.status === 422 || e2.status === 409) keyRef.current = null;
+      if (e2.status === 422 || e2.status === 409 || e2.status === 403) keyRef.current = null;
     } finally {
       setLoading(false);
     }
@@ -143,6 +151,11 @@ export function Retiro() {
               <Input id="w-doc" inputMode="numeric" value={holderDocument} onChange={(e) => setHolderDocument(e.target.value)} error={!!errors.holderDocument} />
             </FormField>
           </div>
+          {needMfa && (
+            <FormField label="Código de verificación en dos pasos" htmlFor="w-mfa" error={errors.mfaCode} hint="6 dígitos de tu app autenticadora (o un código de recuperación). Si acabas de usar este mismo código para iniciar sesión, espera al siguiente." required>
+              <Input id="w-mfa" autoComplete="one-time-code" inputMode="text" placeholder="123456" value={mfaCode} onChange={(e) => setMfaCode(e.target.value)} error={!!errors.mfaCode} />
+            </FormField>
+          )}
           {submitError && <p role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">{submitError}</p>}
           <Button type="submit" fullWidth loading={loading}>Solicitar retiro</Button>
         </form>
