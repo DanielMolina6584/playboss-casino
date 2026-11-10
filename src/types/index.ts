@@ -22,6 +22,37 @@ export interface User {
   photoUrl?: string;
   /** Código de documento (CC, CE...). */
   documentType?: string;
+  /** Autenticación en dos pasos activa. */
+  mfaActive?: boolean;
+  /** Su rol exige 2FA (admin): sin él no puede usar el panel ni retirar. */
+  mfaRequired?: boolean;
+}
+
+export interface MfaStatus {
+  enabled: boolean;
+  active: boolean;
+  required: boolean;
+  setupPending: boolean;
+  recoveryRemaining: number;
+  confirmedAt: string | null;
+  issuer: string;
+  hasPassword: boolean;
+}
+
+export interface MfaSetup {
+  secret: string;
+  otpauthUri: string;
+  issuer: string;
+  account: string;
+}
+
+/** Reto de segundo paso tras validar contraseña o Google. */
+export interface MfaChallenge {
+  token: string;
+  expiresAt: number;
+  via: 'password' | 'google';
+  /** Solo Google: el usuario es nuevo. */
+  isNew?: boolean;
 }
 
 export interface Sport {
@@ -254,6 +285,8 @@ export interface WithdrawalPayload {
   holder: string;
   holderDocument: string;
   idempotencyKey: string;
+  /** Código de 2FA (TOTP o de recuperación); obligatorio si el usuario tiene 2FA activo. */
+  mfaCode?: string;
 }
 
 export type LimitType = 'deposit' | 'stake';
@@ -382,4 +415,8 @@ export interface ApiError {
   retryAfter?: number;
   /** La API no está accesible (sin red / no desplegada): habilita el fallback a mock. */
   unavailable?: boolean;
+  /** 403 `data.mfa_requerido`: el rol exige activar el 2FA antes de continuar. */
+  mfaRequired?: boolean;
+  /** 403 `data.mfa_codigo_requerido`: la operación exige un código de 2FA. */
+  mfaCodeRequired?: boolean;
 }

@@ -44,9 +44,13 @@ export function Login() {
 
     setLoading(true);
     try {
-      await login({ email, password, remember });
-      showToast('¡Bienvenido de nuevo!', 'success');
+      const outcome = await login({ email, password, remember });
       const from = (location.state as { from?: Location })?.from;
+      if (outcome === 'mfa') {
+        navigate('/login/verificacion', { replace: true, state: { from } });
+        return;
+      }
+      showToast('¡Bienvenido de nuevo!', 'success');
       const redirectTo = from ? `${from.pathname}${from.search ?? ''}` : '/';
       navigate(redirectTo, { replace: true });
     } catch (err) {
@@ -60,9 +64,14 @@ export function Login() {
     setSubmitError(null);
     setLoading(true);
     try {
-      const incomplete = await loginWithGoogle(credential);
-      showToast('¡Bienvenido!', 'success');
+      const outcome = await loginWithGoogle(credential);
       const from = (location.state as { from?: Location })?.from;
+      if (outcome === 'mfa') {
+        navigate('/login/verificacion', { replace: true, state: { from } });
+        return;
+      }
+      showToast('¡Bienvenido!', 'success');
+      const incomplete = outcome === 'incomplete';
       navigate(incomplete ? '/completar-perfil' : from ? `${from.pathname}${from.search ?? ''}` : '/', { replace: true });
     } catch (err) {
       setSubmitError((err as { message?: string })?.message ?? 'No fue posible iniciar sesión con Google.');

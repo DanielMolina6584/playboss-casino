@@ -27,6 +27,8 @@ import { CompletarPerfil } from '@/pages/auth/CompletarPerfil';
 import { Recuperar } from '@/pages/auth/Recuperar';
 import { RecuperarCodigo } from '@/pages/auth/RecuperarCodigo';
 import { RecuperarNuevaContrasena } from '@/pages/auth/RecuperarNuevaContrasena';
+import { VerificacionDosPasos } from '@/pages/auth/VerificacionDosPasos';
+import { MfaRequiredListener } from '@/router/MfaRequiredListener';
 
 export default function App() {
   return (
@@ -35,6 +37,7 @@ export default function App() {
         <ToastProvider>
           <WalletProvider>
             <BetSlipProvider>
+              <MfaRequiredListener />
               <Routes>
                 <Route element={<AppLayout />}>
                   {/* Rutas públicas */}
@@ -50,6 +53,7 @@ export default function App() {
                   {/* Rutas solo para invitados */}
                   <Route element={<PublicOnlyRoute />}>
                     <Route path="/login" element={<Login />} />
+                    <Route path="/login/verificacion" element={<VerificacionDosPasos />} />
                     <Route path="/registro" element={<Registro />} />
                     <Route path="/recuperar" element={<Recuperar />} />
                     <Route path="/recuperar/codigo" element={<RecuperarCodigo />} />

@@ -13,6 +13,8 @@ import { httpClient, toQuery, type ApiEnvelope, type ApiPage } from '@/utils/htt
 import { currentMockUserId, mockError, withMock } from '@/services/dataSource';
 import { getAccount, getDb, nextId, postMovement, saveDb, type MockWithdrawal } from '@/mocks/store';
 import { LIMITS } from '@/config/limits';
+import { codeFields } from '@/services/mfaService';
+import { mockWithdrawalStep } from '@/mocks/mfa';
 import { formatCurrency } from '@/utils/formatters';
 
 // Contrato: GET /cuenta, GET /cuenta/movimientos, POST/GET /pagos/retiros (docs/CONTRATOS-API.md)
@@ -241,10 +243,15 @@ export const walletService = {
           titular: payload.holder,
           documento_titular: payload.holderDocument,
           idempotency_key: payload.idempotencyKey,
+          ...(payload.mfaCode ? codeFields(payload.mfaCode) : {}),
         });
         return mapRetiro(res.data);
       },
-      () => mockRequestWithdrawal(payload),
+      async () => {
+        const f = payload.mfaCode ? codeFields(payload.mfaCode) : {};
+        await mockWithdrawalStep(currentMockUserId(), f.codigo, f.codigo_recuperacion);
+        return mockRequestWithdrawal(payload);
+      },
       600,
     );
   },

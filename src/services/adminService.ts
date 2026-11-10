@@ -1,8 +1,9 @@
 import type { AdminUser, Paginated, UserStatus, WithdrawalRequest, WithdrawalStatus } from '@/types';
 import { httpClient, toQuery, type ApiEnvelope, type ApiPage } from '@/utils/httpClient';
-import { mockError, withMock } from '@/services/dataSource';
+import { currentMockUserId, mockError, withMock } from '@/services/dataSource';
 import { getDb, postMovement, saveDb } from '@/mocks/store';
 import { mapRetiro, type ApiRetiro } from '@/services/walletService';
+import { mockRequireAdminMfa } from '@/mocks/mfa';
 
 // Contratos: GET /admin/usuarios, PUT /admin/usuarios/{id}/estado, GET /admin/retiros,
 // POST /admin/retiros/{id}/aprobar|rechazar (docs/CONTRATOS-API.md)
@@ -69,6 +70,7 @@ export const adminService = {
         return { items: items.map(mapUser), page: meta.page, perPage: meta.per_page, total: meta.total, lastPage: meta.last_page };
       },
       () => {
+        mockRequireAdminMfa(currentMockUserId());
         const q = f.q?.trim().toLowerCase();
         const all = getDb()
           .users.filter((r) => !f.status || r.status === f.status)
@@ -100,6 +102,7 @@ export const adminService = {
         return mapUser(res.data);
       },
       () => {
+        mockRequireAdminMfa(currentMockUserId());
         const rec = getDb().users.find((r) => r.user.id === id);
         if (!rec) throw mockError('Usuario no encontrado.', 404);
         rec.status = status;
@@ -129,6 +132,7 @@ export const adminService = {
         return { items: items.map(mapRetiro), page: meta.page, perPage: meta.per_page, total: meta.total, lastPage: meta.last_page };
       },
       () => {
+        mockRequireAdminMfa(currentMockUserId());
         const all = getDb()
           .withdrawals.filter((w) => !status || w.status === status)
           .sort((a, b) => b.requestedAt.localeCompare(a.requestedAt))
@@ -143,6 +147,7 @@ export const adminService = {
     return withMock(
       async () => mapRetiro((await httpClient.post<ApiEnvelope<ApiRetiro>>(`/admin/retiros/${encodeURIComponent(id)}/aprobar`)).data),
       () => {
+        mockRequireAdminMfa(currentMockUserId());
         const w = mockWithdrawal(id);
         if (w.status === 'rejected') throw mockError('Ya fue rechazado.', 409);
         if (w.status === 'pending') {
@@ -162,6 +167,7 @@ export const adminService = {
       async () =>
         mapRetiro((await httpClient.post<ApiEnvelope<ApiRetiro>>(`/admin/retiros/${encodeURIComponent(id)}/rechazar`, { motivo: reason })).data),
       () => {
+        mockRequireAdminMfa(currentMockUserId());
         if (reason.trim().length < 3) throw mockError('El motivo es obligatorio (mínimo 3 caracteres).');
         const w = mockWithdrawal(id);
         if (w.status === 'paid') throw mockError('Ya fue pagado.', 409);

@@ -83,12 +83,22 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
   if (response.status === 403) {
     let detail: string | undefined;
+    let flags: { mfa_requerido?: boolean; mfa_codigo_requerido?: boolean } = {};
     try {
-      detail = ((await response.json()) as { mensaje?: string[] }).mensaje?.join(' ');
+      const b = (await response.json()) as { mensaje?: string[]; data?: typeof flags | unknown[] };
+      detail = b.mensaje?.join(' ');
+      if (b.data && !Array.isArray(b.data)) flags = b.data;
     } catch {
       /* sin cuerpo JSON */
     }
-    const err: ApiError = { status: 403, message: detail || 'No tienes permisos para realizar esta acción.' };
+    const err: ApiError = {
+      status: 403,
+      message: detail || 'No tienes permisos para realizar esta acción.',
+      mfaRequired: flags.mfa_requerido === true,
+      mfaCodeRequired: flags.mfa_codigo_requerido === true,
+    };
+    // Un rol que exige 2FA y aún no lo activó: la app lo lleva a configurarlo (ver MfaRequiredListener).
+    if (err.mfaRequired) window.dispatchEvent(new CustomEvent('playboss:mfa-required'));
     throw err;
   }
 

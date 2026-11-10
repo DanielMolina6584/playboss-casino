@@ -11,6 +11,7 @@ import { PageHeader } from '@/components/common/PageHeader';
 import { Select } from '@/components/common/Select';
 import { Modal } from '@/components/common/Modal';
 import { Loading } from '@/components/common/Loading';
+import { MfaSection } from '@/components/profile/MfaSection';
 import { ErrorMessage } from '@/components/common/EmptyState';
 import { userService } from '@/services/userService';
 import { limitsService, SELF_EXCLUSION_OPTIONS, type LimitChanges } from '@/services/limitsService';
@@ -316,6 +317,10 @@ export function Perfil() {
           <section className="card-surface p-5 sm:p-6" aria-labelledby="sec-info">
             <h2 id="sec-info" className="mb-4 text-lg font-semibold text-text-primary">Información personal</h2>
             <ProfileForm />
+          </section>
+          <section id="seguridad" className="card-surface p-5 sm:p-6" aria-labelledby="sec-mfa">
+            <h2 id="sec-mfa" className="mb-4 text-lg font-semibold text-text-primary">Seguridad: verificación en dos pasos</h2>
+            <MfaSection />
           </section>
           <section className="card-surface p-5 sm:p-6" aria-labelledby="sec-pass">
             <h2 id="sec-pass" className="mb-4 text-lg font-semibold text-text-primary">Cambiar contraseña</h2>

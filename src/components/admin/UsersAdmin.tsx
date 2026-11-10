@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { AdminUser, Paginated, UserStatus } from '@/types';
 import { adminService } from '@/services/adminService';
+import { mfaService } from '@/services/mfaService';
 import { AdminTable } from '@/components/admin/AdminTable';
 import { Input } from '@/components/common/Input';
 import { Select } from '@/components/common/Select';
@@ -34,6 +35,8 @@ export function UsersAdmin() {
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [mfaTarget, setMfaTarget] = useState<AdminUser | null>(null);
+  const [mfaReason, setMfaReason] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -65,6 +68,22 @@ export function UsersAdmin() {
       load();
     } catch (err) {
       setActionError((err as { message?: string })?.message ?? 'No fue posible cambiar el estado.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function resetMfa() {
+    if (!mfaTarget) return;
+    setBusy(true);
+    setActionError(null);
+    try {
+      const r = await mfaService.adminReset(mfaTarget.id, mfaReason.trim());
+      showToast(r.hadMfa ? `2FA de ${mfaTarget.name || mfaTarget.email} restablecido; sus sesiones se cerraron.` : 'Ese usuario no tenía 2FA; se cerraron sus sesiones.', 'success');
+      setMfaTarget(null);
+      setMfaReason('');
+    } catch (err) {
+      setActionError((err as { message?: string })?.message ?? 'No fue posible restablecer el 2FA.');
     } finally {
       setBusy(false);
     }
@@ -108,6 +127,7 @@ export function UsersAdmin() {
                   {u.id === me?.id ? (
                     <span className="text-xs text-text-secondary">Tu cuenta</span>
                   ) : (
+                    <div className="flex items-center gap-2">
                     <Select
                       aria-label={`Cambiar estado de ${u.name || u.email}`}
                       value=""
@@ -119,6 +139,14 @@ export function UsersAdmin() {
                         <option key={s} value={s}>{STATUS_LABEL[s]}</option>
                       ))}
                     </Select>
+                    <button
+                      type="button"
+                      className="whitespace-nowrap text-xs font-medium text-gold hover:text-gold-secondary"
+                      onClick={() => { setMfaTarget(u); setMfaReason(''); setActionError(null); }}
+                    >
+                      Restablecer 2FA
+                    </button>
+                    </div>
                   )}
                 </td>
               </tr>
@@ -143,6 +171,23 @@ export function UsersAdmin() {
             <div className="mt-5 grid grid-cols-2 gap-3">
               <Button variant="secondary" onClick={() => setTarget(null)} disabled={busy}>Cancelar</Button>
               <Button onClick={confirm} loading={busy}>Confirmar</Button>
+            </div>
+          </>
+        )}
+      </Modal>
+
+      <Modal isOpen={!!mfaTarget} onClose={busy ? () => undefined : () => setMfaTarget(null)} title="Restablecer 2FA">
+        {mfaTarget && (
+          <>
+            <p className="text-sm text-text-secondary">
+              Se quitará la verificación en dos pasos de <strong className="text-text-primary">{mfaTarget.name || mfaTarget.email}</strong> y se cerrarán sus sesiones. Deberá configurarla de nuevo. Queda registrado en la auditoría.
+            </p>
+            <label htmlFor="u-mfa-reason" className="label-base mt-4">Motivo (obligatorio)</label>
+            <Input id="u-mfa-reason" maxLength={300} placeholder="Perdió el teléfono; identidad validada" value={mfaReason} onChange={(e) => setMfaReason(e.target.value)} />
+            {actionError && <p role="alert" className="mt-3 text-sm text-red-400">{actionError}</p>}
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <Button variant="secondary" onClick={() => setMfaTarget(null)} disabled={busy}>Cancelar</Button>
+              <Button onClick={resetMfa} loading={busy} disabled={mfaReason.trim().length < 5}>Restablecer</Button>
             </div>
           </>
         )}
