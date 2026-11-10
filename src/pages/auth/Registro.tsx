@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/useToast';
@@ -9,6 +9,7 @@ import { PasswordInput } from '@/components/common/PasswordInput';
 import { Button } from '@/components/common/Button';
 import { GoogleSignInButton } from '@/components/auth/GoogleSignInButton';
 import { GOOGLE_BUTTON_AVAILABLE } from '@/config/auth';
+import { PhotoPicker, validatePhoto } from '@/components/common/PhotoPicker';
 import { DOCUMENT_TYPES } from '@/constants/documentTypes';
 import {
   isAdult,
@@ -40,10 +41,6 @@ const INITIAL_FORM: RegisterPayload = {
   photo: null,
 };
 
-// Reglas de foto del API (SvcFotoPerfil::REGLAS): imagen jpg/jpeg/png/webp de hasta 3 MB.
-const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
-const PHOTO_MAX_BYTES = 3 * 1024 * 1024;
-
 export function Registro() {
   const { register, loginWithGoogle } = useAuth();
   const { showToast } = useToast();
@@ -53,38 +50,16 @@ export function Registro() {
   const [errors, setErrors] = useState<FormErrors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
 
   // Vista previa local; se libera la URL del objeto al cambiar de foto o desmontar.
-  useEffect(() => {
-    if (!form.photo) {
-      setPhotoUrl(null);
-      return;
-    }
-    const url = URL.createObjectURL(form.photo);
-    setPhotoUrl(url);
-    return () => URL.revokeObjectURL(url);
-  }, [form.photo]);
-
-  function checkPhoto(file: File | null): string | undefined {
-    if (!file) return 'La foto de perfil es obligatoria.';
-    if (!PHOTO_TYPES.includes(file.type)) return 'La foto debe ser JPG, PNG o WEBP.';
-    if (file.size > PHOTO_MAX_BYTES) return 'La foto no puede superar 3 MB.';
-    return undefined;
-  }
-
-  function handlePhoto(file: File | null) {
-    const msg = file ? checkPhoto(file) : undefined;
-    setErrors((prev) => ({ ...prev, photo: msg }));
-    update('photo', msg ? null : file);
-  }
-
   function update<K extends keyof RegisterPayload>(key: K, value: RegisterPayload[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
   function validate(): boolean {
     const next: FormErrors = {};
+    const photoError = validatePhoto(form.photo);
+    if (photoError) next.photo = photoError;
     if (!isRequired(form.firstName)) next.firstName = 'El primer nombre es obligatorio.';
     if (!isRequired(form.lastName)) next.lastName = 'El primer apellido es obligatorio.';
     if (!isRequired(form.documentType)) next.documentType = 'Selecciona un tipo de documento.';
@@ -100,8 +75,6 @@ export function Registro() {
       next.password = 'Usa mínimo 8 caracteres, mayúscula, minúscula, número y símbolo.';
     if (!passwordsMatch(form.password, form.passwordConfirmation)) next.passwordConfirmation = 'Las contraseñas no coinciden.';
     if (form.phone && !/^[0-9+\s-]{7,20}$/.test(form.phone)) next.phone = 'Ingresa un celular válido (7 a 20 dígitos).';
-    const photoError = checkPhoto(form.photo);
-    if (photoError) next.photo = photoError;
     if (!form.acceptsTerms) next.acceptsTerms = 'Debes aceptar los términos y la política de privacidad.';
 
     setErrors(next);
@@ -175,6 +148,16 @@ export function Registro() {
         )}
 
         <form onSubmit={handleSubmit} noValidate className="space-y-4">
+          <PhotoPicker
+            value={form.photo}
+            onChange={(file) => {
+              update('photo', file);
+              setErrors((prev) => ({ ...prev, photo: validatePhoto(file) ?? undefined }));
+            }}
+            error={errors.photo}
+            label="Sube tu foto de perfil"
+          />
+
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <FormField label="Primer nombre" htmlFor="firstName" error={errors.firstName} required>
               <Input
@@ -276,29 +259,6 @@ export function Registro() {
               onChange={(e) => update('phone', e.target.value)}
               error={!!errors.phone}
             />
-          </FormField>
-
-          <FormField label="Foto de perfil" htmlFor="photo" error={errors.photo} hint="JPG, PNG o WEBP, máximo 3 MB" required>
-            <div className="flex items-center gap-3">
-              <span className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gold/10 ring-1 ring-gold/30">
-                {photoUrl ? (
-                  <img src={photoUrl} alt="Vista previa de tu foto de perfil" className="h-full w-full object-cover" />
-                ) : (
-                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="text-gold" aria-hidden="true">
-                    <circle cx="12" cy="8" r="4" />
-                    <path d="M4 21c0-4 4-6 8-6s8 2 8 6" />
-                  </svg>
-                )}
-              </span>
-              <input
-                id="photo"
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                onChange={(e) => handlePhoto(e.target.files?.[0] ?? null)}
-                aria-invalid={!!errors.photo}
-                className="min-w-0 flex-1 text-sm text-text-secondary file:mr-3 file:rounded-lg file:border-0 file:bg-gold file:px-3 file:py-2 file:text-sm file:font-semibold file:text-bg-primary"
-              />
-            </div>
           </FormField>
 
           <FormField label="Fecha de nacimiento" htmlFor="birthDate" error={errors.birthDate} required>

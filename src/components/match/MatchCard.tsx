@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import type { Match, Odd } from '@/types';
 import { OddsButton } from '@/components/match/OddsButton';
 import { TeamBadge } from '@/components/common/TeamBadge';
@@ -89,6 +90,14 @@ export function MatchCard({ match }: { match: Match }) {
       )}
       {market && !bettable && (
         <p className="mt-2 text-center text-xs text-text-secondary">Apuestas cerradas para este partido.</p>
+      )}
+      {match.markets.length > 1 && (
+        <Link
+          to={`/partidos/${match.id}`}
+          className="mt-3 flex items-center justify-center gap-1 rounded-lg border border-border-subtle py-2 text-xs font-semibold text-gold transition-colors hover:border-gold/40 hover:bg-gold/5"
+        >
+          Ver {match.markets.length - 1} mercados más: goles, córners, tarjetas, tiros… <span aria-hidden="true">→</span>
+        </Link>
       )}
     </article>
   );

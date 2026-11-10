@@ -18,6 +18,8 @@ export function setAccessToken(token: string | null): void {
 
 interface RequestOptions extends RequestInit {
   auth?: boolean;
+  /** 'blob' devuelve el cuerpo como archivo (imágenes) en vez de JSON. */
+  responseType?: 'json' | 'blob';
 }
 
 /** Sobre de respuesta común de la API: { error, mensaje[], data }. */
@@ -42,7 +44,7 @@ export interface ApiPage<T> {
  * 502/503/504) para que services/dataSource pueda caer a datos simulados.
  */
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { auth = true, headers, ...rest } = options;
+  const { auth = true, headers, responseType = 'json', ...rest } = options;
 
   // Con FormData (multipart) el navegador fija el Content-Type con su boundary.
   const isForm = typeof FormData !== 'undefined' && rest.body instanceof FormData;
@@ -156,6 +158,10 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     return undefined as T;
   }
 
+  if (responseType === 'blob') {
+    return (await response.blob()) as T;
+  }
+
   try {
     return (await response.json()) as T;
   } catch {
@@ -188,4 +194,9 @@ export const httpClient = {
   patch: <T>(path: string, body?: unknown, options?: RequestOptions) =>
     request<T>(path, { ...options, method: 'PATCH', body: body ? JSON.stringify(body) : undefined }),
   delete: <T>(path: string, options?: RequestOptions) => request<T>(path, { ...options, method: 'DELETE' }),
+  /** POST multipart/form-data (subida de archivos). */
+  postForm: <T>(path: string, form: FormData, options?: RequestOptions) =>
+    request<T>(path, { ...options, method: 'POST', body: form }),
+  /** GET de un archivo binario (p. ej. la foto de perfil). */
+  getBlob: (path: string, options?: RequestOptions) => request<Blob>(path, { ...options, method: 'GET', responseType: 'blob' }),
 };

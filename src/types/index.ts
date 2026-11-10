@@ -26,6 +26,8 @@ export interface User {
   mfaActive?: boolean;
   /** Su rol exige 2FA (admin): sin él no puede usar el panel ni retirar. */
   mfaRequired?: boolean;
+  /** Id de la foto de perfil en Google Drive (se descarga con GET /perfil/foto). */
+  photoId?: string;
 }
 
 export interface MfaStatus {
@@ -76,6 +78,7 @@ export interface Team {
   name: string;
   /** URL pública del escudo (escudo_url de la API). */
   logo?: string;
+  driveFileId?: string;
 }
 
 export type MatchStatus = 'scheduled' | 'live' | 'finished' | 'suspended';
