@@ -6,8 +6,9 @@ import type {
   BetLeg,
   PaymentStatus,
   PaymentTransaction,
-  ResponsibleLimits,
+  LimitKey,
   User,
+  UserStatus,
   WithdrawalRequest,
 } from '@/types';
 
@@ -17,12 +18,23 @@ import type {
 // movimientos, apuestas y pagos sean coherentes entre sí.
 // ---------------------------------------------------------------------------
 
-const KEY = 'playboss_mock_db_v1';
+const KEY = 'playboss_mock_db_v2';
 const DAY = 86_400_000;
 
 export interface MockUserRecord {
   user: User;
   password: string;
+  status: UserStatus;
+}
+
+export interface MockLimitsRecord {
+  limits: Record<LimitKey, number | null>;
+  exclusionUntil: string | null;
+}
+
+export interface MockWithdrawal extends WithdrawalRequest {
+  userId: string;
+  key?: string;
 }
 
 export interface MockPayment extends PaymentTransaction {
@@ -40,8 +52,8 @@ interface MockDb {
   bets: Record<string, Bet[]>;
   payments: Record<string, MockPayment>;
   recovery: Record<string, string>;
-  limits: Record<string, ResponsibleLimits>;
-  withdrawals: Record<string, WithdrawalRequest[]>;
+  limits: Record<string, MockLimitsRecord>;
+  withdrawals: MockWithdrawal[];
 }
 
 export const DEMO_USER = { email: 'demo@playboss.co', password: 'Demo1234!' };
@@ -130,8 +142,17 @@ export function postMovement(
 // Semilla
 // ---------------------------------------------------------------------------
 
-function mkUser(id: string, first: string, last: string, email: string, doc: string, role: User['role']): MockUserRecord {
+function mkUser(
+  id: string,
+  first: string,
+  last: string,
+  email: string,
+  doc: string,
+  role: User['role'],
+  status: UserStatus = 'ACT',
+): MockUserRecord {
   return {
+    status,
     password: role === 'admin' ? DEMO_ADMIN.password : DEMO_USER.password,
     user: {
       id,
@@ -140,6 +161,7 @@ function mkUser(id: string, first: string, last: string, email: string, doc: str
       lastName: last,
       email,
       documentId: doc,
+      documentType: 'CC',
       birthDate: '1992-04-12',
       createdAt: new Date(Date.now() - 60 * DAY).toISOString(),
       role,
@@ -154,6 +176,9 @@ function seed(): MockDb {
     users: [
       mkUser('900001', 'Camila', 'Rojas', DEMO_USER.email, '1012345678', 'user'),
       mkUser('900000', 'Admin', 'PlayBoss', DEMO_ADMIN.email, '79000111', 'admin'),
+      mkUser('900002', 'Andrés', 'Pérez', 'andres.perez@example.com', '1098765432', 'user'),
+      mkUser('900003', 'Laura', 'Gómez', 'laura.gomez@example.com', '52112233', 'user', 'BLQ'),
+      mkUser('900004', 'Mateo', 'Díaz', 'mateo.diaz@example.com', '1020304050', 'user', 'SUS'),
     ],
     accounts: {},
     movements: {},
@@ -161,7 +186,7 @@ function seed(): MockDb {
     payments: {},
     recovery: {},
     limits: {},
-    withdrawals: {},
+    withdrawals: [],
   };
   cache = db;
   const uid = '900001';
@@ -261,6 +286,47 @@ function seed(): MockDb {
     0.05,
     true,
   );
+
+  // Retiros de ejemplo (uno por estado) con sus movimientos contables.
+  const wd = (
+    userId: string,
+    amount: number,
+    status: WithdrawalRequest['status'],
+    daysAgo: number,
+    extra: Partial<MockWithdrawal> = {},
+  ): MockWithdrawal => {
+    const w: MockWithdrawal = {
+      id: String(nextId(db)),
+      userId,
+      amount,
+      currency: 'COP',
+      status,
+      bank: 'Bancolombia',
+      accountType: 'AHORROS',
+      accountNumber: '12345677890',
+      holder: userId === uid ? 'Camila Rojas' : 'Andrés Pérez',
+      holderDocument: userId === uid ? '1012345678' : '1098765432',
+      rejectionReason: null,
+      requestedAt: ago(daysAgo),
+      resolvedAt: status === 'pending' ? null : ago(daysAgo - 0.1),
+      ...extra,
+    };
+    db.withdrawals.unshift(w);
+    postMovement(userId, 'withdrawal_reserved', amount, { available: -amount, held: amount }, `Retiro #${w.id} solicitado`, { at: w.requestedAt });
+    if (status === 'paid') {
+      postMovement(userId, 'withdrawal_paid', amount, { held: -amount }, `Retiro #${w.id} pagado`, { at: w.resolvedAt! });
+    } else if (status === 'rejected') {
+      postMovement(userId, 'withdrawal_released', amount, { available: amount, held: -amount }, `Retiro #${w.id} rechazado`, {
+        at: w.resolvedAt!,
+      });
+    }
+    return w;
+  };
+  wd(uid, 50_000, 'paid', 2.5);
+  wd(uid, 30_000, 'rejected', 1.5, { rejectionReason: 'Datos bancarios inválidos: el número de cuenta no existe.' });
+  wd(uid, 40_000, 'pending', 0.02, { bank: 'Nequi', accountType: 'NEQUI', accountNumber: '3001234567' });
+  postMovement('900002', 'deposit', 200_000, { available: 200_000 }, 'Depósito confirmado por Wompi', { at: ago(4) });
+  wd('900002', 80_000, 'pending', 0.3, { bank: 'Davivienda', accountType: 'CORRIENTE', accountNumber: '4455667788' });
   saveDb();
   return db;
 }

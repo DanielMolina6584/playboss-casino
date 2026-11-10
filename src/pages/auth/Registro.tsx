@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/useToast';
@@ -7,6 +7,8 @@ import { Input } from '@/components/common/Input';
 import { Select } from '@/components/common/Select';
 import { PasswordInput } from '@/components/common/PasswordInput';
 import { Button } from '@/components/common/Button';
+import { GoogleSignInButton } from '@/components/auth/GoogleSignInButton';
+import { GOOGLE_BUTTON_AVAILABLE } from '@/config/auth';
 import { DOCUMENT_TYPES } from '@/constants/documentTypes';
 import {
   isAdult,
@@ -30,14 +32,20 @@ const INITIAL_FORM: RegisterPayload = {
   documentType: '',
   documentId: '',
   email: '',
+  phone: '',
   birthDate: '',
   password: '',
   passwordConfirmation: '',
   acceptsTerms: false,
+  photo: null,
 };
 
+// Reglas de foto del API (SvcFotoPerfil::REGLAS): imagen jpg/jpeg/png/webp de hasta 3 MB.
+const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const PHOTO_MAX_BYTES = 3 * 1024 * 1024;
+
 export function Registro() {
-  const { register } = useAuth();
+  const { register, loginWithGoogle } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
 
@@ -45,6 +53,31 @@ export function Registro() {
   const [errors, setErrors] = useState<FormErrors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+
+  // Vista previa local; se libera la URL del objeto al cambiar de foto o desmontar.
+  useEffect(() => {
+    if (!form.photo) {
+      setPhotoUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(form.photo);
+    setPhotoUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [form.photo]);
+
+  function checkPhoto(file: File | null): string | undefined {
+    if (!file) return 'La foto de perfil es obligatoria.';
+    if (!PHOTO_TYPES.includes(file.type)) return 'La foto debe ser JPG, PNG o WEBP.';
+    if (file.size > PHOTO_MAX_BYTES) return 'La foto no puede superar 3 MB.';
+    return undefined;
+  }
+
+  function handlePhoto(file: File | null) {
+    const msg = file ? checkPhoto(file) : undefined;
+    setErrors((prev) => ({ ...prev, photo: msg }));
+    update('photo', msg ? null : file);
+  }
 
   function update<K extends keyof RegisterPayload>(key: K, value: RegisterPayload[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -66,6 +99,9 @@ export function Registro() {
     else if (!isStrongEnough(form.password))
       next.password = 'Usa mínimo 8 caracteres, mayúscula, minúscula, número y símbolo.';
     if (!passwordsMatch(form.password, form.passwordConfirmation)) next.passwordConfirmation = 'Las contraseñas no coinciden.';
+    if (form.phone && !/^[0-9+\s-]{7,20}$/.test(form.phone)) next.phone = 'Ingresa un celular válido (7 a 20 dígitos).';
+    const photoError = checkPhoto(form.photo);
+    if (photoError) next.photo = photoError;
     if (!form.acceptsTerms) next.acceptsTerms = 'Debes aceptar los términos y la política de privacidad.';
 
     setErrors(next);
@@ -89,6 +125,20 @@ export function Registro() {
     }
   }
 
+  async function handleGoogle(credential: string) {
+    setSubmitError(null);
+    setLoading(true);
+    try {
+      const incomplete = await loginWithGoogle(credential);
+      showToast('¡Cuenta lista!', 'success');
+      navigate(incomplete ? '/completar-perfil' : '/', { replace: true });
+    } catch (err) {
+      setSubmitError((err as { message?: string })?.message ?? 'No fue posible continuar con Google.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <div
       className="auth-page flex min-h-[calc(100vh-64px)] items-center justify-center px-4 py-8 sm:py-10"
@@ -104,6 +154,15 @@ export function Registro() {
           <h1 className="text-2xl font-bold text-text-primary">Crear cuenta</h1>
           <p className="mt-1 text-sm text-text-secondary">Completa tus datos para comenzar</p>
         </div>
+
+        {GOOGLE_BUTTON_AVAILABLE && (
+          <div className="mb-5 space-y-4">
+            <GoogleSignInButton onCredential={handleGoogle} disabled={loading} />
+            <div className="flex items-center gap-3 text-xs text-text-secondary">
+              <span className="h-px flex-1 bg-border-subtle" />o con tu correo<span className="h-px flex-1 bg-border-subtle" />
+            </div>
+          </div>
+        )}
 
         {submitError && (
           <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
@@ -202,6 +261,41 @@ export function Registro() {
               />
             </FormField>
           </div>
+
+          <FormField label="Celular" htmlFor="phone" error={errors.phone} hint="Opcional">
+            <Input
+              id="phone"
+              type="tel"
+              autoComplete="tel"
+              placeholder="3001234567"
+              value={form.phone ?? ''}
+              onChange={(e) => update('phone', e.target.value)}
+              error={!!errors.phone}
+            />
+          </FormField>
+
+          <FormField label="Foto de perfil" htmlFor="photo" error={errors.photo} hint="JPG, PNG o WEBP, máximo 3 MB" required>
+            <div className="flex items-center gap-3">
+              <span className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gold/10 ring-1 ring-gold/30">
+                {photoUrl ? (
+                  <img src={photoUrl} alt="Vista previa de tu foto de perfil" className="h-full w-full object-cover" />
+                ) : (
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="text-gold" aria-hidden="true">
+                    <circle cx="12" cy="8" r="4" />
+                    <path d="M4 21c0-4 4-6 8-6s8 2 8 6" />
+                  </svg>
+                )}
+              </span>
+              <input
+                id="photo"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={(e) => handlePhoto(e.target.files?.[0] ?? null)}
+                aria-invalid={!!errors.photo}
+                className="min-w-0 flex-1 text-sm text-text-secondary file:mr-3 file:rounded-lg file:border-0 file:bg-gold file:px-3 file:py-2 file:text-sm file:font-semibold file:text-bg-primary"
+              />
+            </div>
+          </FormField>
 
           <FormField label="Fecha de nacimiento" htmlFor="birthDate" error={errors.birthDate} required>
             <Input

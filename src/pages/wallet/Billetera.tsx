@@ -17,6 +17,9 @@ const SIGN: Record<AccountMovementType, 1 | -1 | 0> = {
   winnings: 1,
   bet_released: 1,
   withdrawal: -1,
+  withdrawal_reserved: -1,
+  withdrawal_paid: 0,
+  withdrawal_released: 1,
   bet_reserved: -1,
   bet_lost: 0,
 };

@@ -7,7 +7,7 @@ import { Loading } from '@/components/common/Loading';
  * Redirige a /login conservando la ruta de origen para volver tras iniciar sesión.
  */
 export function ProtectedRoute() {
-  const { authenticated, loading } = useAuth();
+  const { authenticated, loading, user } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -20,6 +20,11 @@ export function ProtectedRoute() {
 
   if (!authenticated) {
     return <Navigate to="/login" replace state={{ from: location }} />;
+  }
+
+  // Usuario creado con Google sin fecha de nacimiento/documento: debe completarlos primero.
+  if (user?.profileComplete === false && location.pathname !== '/completar-perfil') {
+    return <Navigate to="/completar-perfil" replace />;
   }
 
   return <Outlet />;

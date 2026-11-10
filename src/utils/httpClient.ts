@@ -44,8 +44,10 @@ export interface ApiPage<T> {
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { auth = true, headers, ...rest } = options;
 
+  // Con FormData (multipart) el navegador fija el Content-Type con su boundary.
+  const isForm = typeof FormData !== 'undefined' && rest.body instanceof FormData;
   const finalHeaders: HeadersInit = {
-    'Content-Type': 'application/json',
+    ...(isForm ? {} : { 'Content-Type': 'application/json' }),
     Accept: 'application/json',
     ...headers,
   };
@@ -80,15 +82,30 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
 
   if (response.status === 403) {
-    const err: ApiError = { status: 403, message: 'No tienes permisos para realizar esta acción.' };
+    let detail: string | undefined;
+    try {
+      detail = ((await response.json()) as { mensaje?: string[] }).mensaje?.join(' ');
+    } catch {
+      /* sin cuerpo JSON */
+    }
+    const err: ApiError = { status: 403, message: detail || 'No tienes permisos para realizar esta acción.' };
     throw err;
   }
 
   if (response.status >= 500) {
+    // Si la API respondió con su sobre { error, mensaje[] } (p. ej. 503 de /contacto, 502 de
+    // Wompi) el servidor SÍ está disponible: se muestra su mensaje y no se cae a mock.
+    let apiMessage: string | undefined;
+    try {
+      const b = (await response.json()) as { error?: number; mensaje?: string[] };
+      if (b.error === 1 && b.mensaje?.length) apiMessage = b.mensaje.join(' ');
+    } catch {
+      /* cuerpo no JSON: proxy / servidor caído */
+    }
     const err: ApiError = {
       status: response.status,
-      message: 'Ocurrió un error en el servidor. Intenta más tarde.',
-      unavailable: [502, 503, 504].includes(response.status),
+      message: apiMessage ?? 'Ocurrió un error en el servidor. Intenta más tarde.',
+      unavailable: !apiMessage && [502, 503, 504].includes(response.status),
     };
     throw err;
   }
@@ -96,21 +113,30 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   if (!response.ok) {
     // La API responde { error, mensaje: string[], data } en vez del
     // { message, errors } genérico; se soportan ambos formatos aquí.
-    let body: { message?: string; mensaje?: string[]; errors?: Record<string, string[]> } = {};
+    let body: {
+      message?: string;
+      mensaje?: string[];
+      errors?: Record<string, string[]>;
+      data?: { errores?: Record<string, string[]>; retry_after?: string | number } | unknown[];
+    } = {};
     let jsonBody = true;
     try {
       body = await response.json();
     } catch {
       jsonBody = false; // p. ej. HTML 404 del servidor web: la API no está desplegada
     }
-    const fieldErrors = body.errors ? Object.values(body.errors).flat() : [];
+    const data = body.data && !Array.isArray(body.data) ? body.data : undefined;
+    const errors = body.errors ?? data?.errores;
+    const fieldErrors = errors ? Object.values(errors).flat() : [];
+    const retryAfter = Number(data?.retry_after ?? response.headers.get('Retry-After'));
     const err: ApiError = {
       status: response.status,
       message:
         body.mensaje?.length
           ? body.mensaje.join(' ')
           : (fieldErrors[0] ?? body.message ?? 'Ocurrió un error inesperado.'),
-      errors: body.errors,
+      errors,
+      retryAfter: Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : undefined,
       unavailable: !jsonBody && response.status === 404,
     };
     throw err;
@@ -138,12 +164,17 @@ export function toQuery(params: Record<string, string | number | undefined | nul
   return s ? `?${s}` : '';
 }
 
+function encodeBody(body: unknown): BodyInit | undefined {
+  if (body === undefined || body === null) return undefined;
+  return typeof FormData !== 'undefined' && body instanceof FormData ? body : JSON.stringify(body);
+}
+
 export const httpClient = {
   get: <T>(path: string, options?: RequestOptions) => request<T>(path, { ...options, method: 'GET' }),
   post: <T>(path: string, body?: unknown, options?: RequestOptions) =>
-    request<T>(path, { ...options, method: 'POST', body: body ? JSON.stringify(body) : undefined }),
+    request<T>(path, { ...options, method: 'POST', body: encodeBody(body) }),
   put: <T>(path: string, body?: unknown, options?: RequestOptions) =>
-    request<T>(path, { ...options, method: 'PUT', body: body ? JSON.stringify(body) : undefined }),
+    request<T>(path, { ...options, method: 'PUT', body: encodeBody(body) }),
   patch: <T>(path: string, body?: unknown, options?: RequestOptions) =>
     request<T>(path, { ...options, method: 'PATCH', body: body ? JSON.stringify(body) : undefined }),
   delete: <T>(path: string, options?: RequestOptions) => request<T>(path, { ...options, method: 'DELETE' }),

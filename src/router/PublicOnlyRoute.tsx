@@ -7,7 +7,7 @@ import { Loading } from '@/components/common/Loading';
  * Si el usuario ya está autenticado, lo redirige fuera de estas pantallas.
  */
 export function PublicOnlyRoute() {
-  const { authenticated, loading } = useAuth();
+  const { authenticated, loading, user } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -16,6 +16,10 @@ export function PublicOnlyRoute() {
         <Loading />
       </div>
     );
+  }
+
+  if (authenticated && user?.profileComplete === false) {
+    return <Navigate to="/completar-perfil" replace />;
   }
 
   if (authenticated) {

@@ -1,5 +1,5 @@
 import { createContext, useCallback, useEffect, useState, type ReactNode } from 'react';
-import type { LoginPayload, RegisterPayload, User } from '@/types';
+import type { CompleteProfilePayload, LoginPayload, RegisterPayload, User } from '@/types';
 import { authService } from '@/services/authService';
 
 interface AuthContextValue {
@@ -9,6 +9,9 @@ interface AuthContextValue {
   error: string | null;
   login: (payload: LoginPayload) => Promise<void>;
   register: (payload: RegisterPayload) => Promise<void>;
+  /** Devuelve true si el perfil quedó incompleto (debe completarlo antes de apostar/depositar). */
+  loginWithGoogle: (credential: string) => Promise<boolean>;
+  completeProfile: (payload: CompleteProfilePayload) => Promise<void>;
   logout: () => Promise<void>;
   clearError: () => void;
   updateUser: (user: User) => void;
@@ -67,6 +70,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const loginWithGoogle = useCallback(async (credential: string) => {
+    setError(null);
+    try {
+      const result = await authService.loginWithGoogle(credential);
+      setUser(result.user);
+      return result.profileIncomplete;
+    } catch (err) {
+      const message = (err as { message?: string })?.message ?? 'No fue posible iniciar sesión con Google.';
+      setError(message);
+      throw err;
+    }
+  }, []);
+
+  const completeProfile = useCallback(async (payload: CompleteProfilePayload) => {
+    setUser(await authService.completeGoogleProfile(payload));
+  }, []);
+
   const logout = useCallback(async () => {
     await authService.logout();
     setUser(null);
@@ -77,7 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, authenticated: !!user, loading, error, login, register, logout, clearError, updateUser }}
+      value={{ user, authenticated: !!user, loading, error, login, register, loginWithGoogle, completeProfile, logout, clearError, updateUser }}
     >
       {children}
     </AuthContext.Provider>

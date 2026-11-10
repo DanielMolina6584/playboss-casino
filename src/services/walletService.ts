@@ -1,10 +1,21 @@
-import type { Account, AccountMovement, AccountMovementType, MovementFilters, Paginated, WithdrawalRequest } from '@/types';
+import type {
+  Account,
+  AccountMovement,
+  AccountMovementType,
+  BankAccountType,
+  MovementFilters,
+  Paginated,
+  WithdrawalPayload,
+  WithdrawalRequest,
+  WithdrawalStatus,
+} from '@/types';
 import { httpClient, toQuery, type ApiEnvelope, type ApiPage } from '@/utils/httpClient';
 import { currentMockUserId, mockError, withMock } from '@/services/dataSource';
-import { getAccount, getDb, nextId, saveDb } from '@/mocks/store';
+import { getAccount, getDb, nextId, postMovement, saveDb, type MockWithdrawal } from '@/mocks/store';
 import { LIMITS } from '@/config/limits';
+import { formatCurrency } from '@/utils/formatters';
 
-// Contrato: GET /cuenta, GET /cuenta/movimientos (docs/CONTRATOS-API.md)
+// Contrato: GET /cuenta, GET /cuenta/movimientos, POST/GET /pagos/retiros (docs/CONTRATOS-API.md)
 
 interface ApiCuenta {
   saldo_disponible: string | number;
@@ -29,6 +40,9 @@ const TIPO_FROM_API: Record<string, AccountMovementType> = {
   APUESTA_ANULADA: 'bet_released',
   APUESTA_PERDIDA: 'bet_lost',
   APUESTA_GANADA: 'winnings',
+  RETIRO_RESERVADO: 'withdrawal_reserved',
+  RETIRO_PAGADO: 'withdrawal_paid',
+  RETIRO_LIBERADO: 'withdrawal_released',
 };
 const TIPO_TO_API = Object.fromEntries(Object.entries(TIPO_FROM_API).map(([k, v]) => [v, k])) as Record<
   AccountMovementType,
@@ -38,6 +52,9 @@ const TIPO_TO_API = Object.fromEntries(Object.entries(TIPO_FROM_API).map(([k, v]
 export const movementLabels: Record<AccountMovementType, string> = {
   deposit: 'Depósito',
   withdrawal: 'Retiro',
+  withdrawal_reserved: 'Retiro solicitado',
+  withdrawal_paid: 'Retiro pagado',
+  withdrawal_released: 'Retiro rechazado (devuelto)',
   bet_reserved: 'Apuesta realizada',
   bet_released: 'Apuesta anulada',
   bet_lost: 'Apuesta perdida',
@@ -45,7 +62,7 @@ export const movementLabels: Record<AccountMovementType, string> = {
 };
 
 function mapMovimiento(m: ApiMovimiento): AccountMovement {
-  const type = TIPO_FROM_API[m.tipo] ?? 'deposit';
+  const type = TIPO_FROM_API[m.tipo?.toUpperCase()] ?? 'deposit';
   return {
     id: String(m.id),
     type,
@@ -56,6 +73,102 @@ function mapMovimiento(m: ApiMovimiento): AccountMovement {
     description: m.descripcion ?? movementLabels[type],
     createdAt: m.fecha,
   };
+}
+
+export interface ApiRetiro {
+  id: number;
+  estado: string;
+  monto: string | number;
+  moneda?: string;
+  destino: {
+    banco: string;
+    tipo_cuenta: BankAccountType;
+    numero_cuenta: string;
+    titular: string;
+    documento_titular?: string;
+  };
+  motivo_rechazo?: string | null;
+  solicitado_en?: string;
+  resuelto_en?: string | null;
+  usuario_id?: number;
+}
+
+const RETIRO_ESTADO: Record<string, WithdrawalStatus> = { PENDIENTE: 'pending', PAGADO: 'paid', RECHAZADO: 'rejected' };
+
+export const withdrawalStatusLabels: Record<WithdrawalStatus, string> = {
+  pending: 'Pendiente',
+  paid: 'Pagado',
+  rejected: 'Rechazado',
+};
+
+export const accountTypeLabels: Record<BankAccountType, string> = {
+  AHORROS: 'Cuenta de ahorros',
+  CORRIENTE: 'Cuenta corriente',
+  NEQUI: 'Nequi',
+  DAVIPLATA: 'Daviplata',
+};
+
+export function mapRetiro(r: ApiRetiro): WithdrawalRequest {
+  return {
+    id: String(r.id),
+    amount: Number(r.monto),
+    currency: r.moneda || 'COP',
+    status: RETIRO_ESTADO[r.estado?.toUpperCase()] ?? 'pending',
+    bank: r.destino?.banco ?? '',
+    accountType: r.destino?.tipo_cuenta ?? 'AHORROS',
+    accountNumber: r.destino?.numero_cuenta ?? '',
+    holder: r.destino?.titular ?? '',
+    holderDocument: r.destino?.documento_titular,
+    rejectionReason: r.motivo_rechazo ?? null,
+    requestedAt: r.solicitado_en ?? '',
+    resolvedAt: r.resuelto_en ?? null,
+    userId: r.usuario_id !== undefined ? String(r.usuario_id) : undefined,
+  };
+}
+
+/** Vista de cliente: número enmascarado y sin documento (igual que el API). */
+function toClientView(w: MockWithdrawal): WithdrawalRequest {
+  const { userId: _u, key: _k, holderDocument: _d, ...rest } = w;
+  void _u; void _k; void _d;
+  return { ...rest, accountNumber: `****${w.accountNumber.slice(-4)}` };
+}
+
+function mockRequestWithdrawal(p: WithdrawalPayload): WithdrawalRequest {
+  const db = getDb();
+  const userId = currentMockUserId();
+  const existing = db.withdrawals.find((w) => w.userId === userId && w.key === p.idempotencyKey);
+  if (existing) return toClientView(existing);
+
+  const rec = db.users.find((u) => u.user.id === userId);
+  if (p.amount < LIMITS.minWithdrawal) throw mockError(`El retiro mínimo es ${formatCurrency(LIMITS.minWithdrawal)}.`);
+  if (p.amount > LIMITS.maxWithdrawal) throw mockError(`El retiro máximo es ${formatCurrency(LIMITS.maxWithdrawal)}.`);
+  if (rec && rec.user.documentId && rec.user.documentId !== p.holderDocument)
+    throw mockError('El documento del titular debe coincidir con el de tu cuenta.');
+  if (p.amount > getAccount(userId).availableBalance) throw mockError('Saldo insuficiente para este retiro.');
+  const pending = db.withdrawals.filter((w) => w.userId === userId && w.status === 'pending').length;
+  if (pending >= LIMITS.maxPendingWithdrawals)
+    throw mockError(`Ya tienes ${pending} solicitudes de retiro pendientes. Espera a que se resuelvan.`);
+
+  const w: MockWithdrawal = {
+    id: String(nextId(db)),
+    userId,
+    key: p.idempotencyKey,
+    amount: p.amount,
+    currency: 'COP',
+    status: 'pending',
+    bank: p.bank,
+    accountType: p.accountType,
+    accountNumber: p.accountNumber,
+    holder: p.holder,
+    holderDocument: p.holderDocument,
+    rejectionReason: null,
+    requestedAt: new Date().toISOString(),
+    resolvedAt: null,
+  };
+  db.withdrawals.unshift(w);
+  postMovement(userId, 'withdrawal_reserved', p.amount, { available: -p.amount, held: p.amount }, `Retiro #${w.id} solicitado`);
+  saveDb();
+  return toClientView(w);
 }
 
 export const walletService = {
@@ -116,25 +229,48 @@ export const walletService = {
     );
   },
 
-  /**
-   * La API aún no tiene endpoint de retiros (solo transacciones tipo RETIRO en
-   * el modelo). Se registra una solicitud SIMULADA en el navegador: no mueve
-   * dinero ni llega a ningún backend. Ver docs/CONTRATOS-API.md (pendiente).
-   */
-  async requestWithdrawal(userId: string, amount: number, bankAccount: string): Promise<WithdrawalRequest> {
-    await new Promise((r) => setTimeout(r, 600));
-    const db = getDb();
-    if (amount < LIMITS.minWithdrawal) throw mockError('El retiro mínimo es de $20.000.');
-    const req: WithdrawalRequest = {
-      id: `RET-${nextId(db)}`,
-      amount,
-      bankAccount,
-      status: 'requested',
-      createdAt: new Date().toISOString(),
-      simulated: true,
-    };
-    (db.withdrawals[userId] ??= []).unshift(req);
-    saveDb();
-    return req;
+  /** POST /pagos/retiros: crea una solicitud PENDIENTE y reserva el saldo (movimiento RETIRO_RESERVADO). */
+  requestWithdrawal(payload: WithdrawalPayload): Promise<WithdrawalRequest> {
+    return withMock(
+      async () => {
+        const res = await httpClient.post<ApiEnvelope<ApiRetiro>>('/pagos/retiros', {
+          monto: String(payload.amount),
+          banco: payload.bank,
+          tipo_cuenta: payload.accountType,
+          numero_cuenta: payload.accountNumber,
+          titular: payload.holder,
+          documento_titular: payload.holderDocument,
+          idempotency_key: payload.idempotencyKey,
+        });
+        return mapRetiro(res.data);
+      },
+      () => mockRequestWithdrawal(payload),
+      600,
+    );
+  },
+
+  /** GET /pagos/retiros: mis solicitudes (más recientes primero). */
+  getWithdrawals(page = 1, perPage = 10): Promise<Paginated<WithdrawalRequest>> {
+    return withMock(
+      async () => {
+        const res = await httpClient.get<ApiEnvelope<ApiPage<ApiRetiro>>>(`/pagos/retiros${toQuery({ page, per_page: perPage })}`);
+        const { items, meta } = res.data;
+        return { items: items.map(mapRetiro), page: meta.page, perPage: meta.per_page, total: meta.total, lastPage: meta.last_page };
+      },
+      () => {
+        const all = getDb()
+          .withdrawals.filter((w) => w.userId === currentMockUserId())
+          .sort((a, b) => b.requestedAt.localeCompare(a.requestedAt))
+          .map(toClientView);
+        return {
+          items: all.slice((page - 1) * perPage, page * perPage),
+          page,
+          perPage,
+          total: all.length,
+          lastPage: Math.max(1, Math.ceil(all.length / perPage)),
+        };
+      },
+      300,
+    );
   },
 };

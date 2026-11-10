@@ -4,6 +4,7 @@ import type { PaymentMethodCode } from '@/types';
 import { paymentMethods, paymentsService } from '@/services/paymentsService';
 import { useWallet } from '@/hooks/useWallet';
 import { PageHeader } from '@/components/common/PageHeader';
+import { LimitLink } from '@/components/common/LimitLink';
 import { Button } from '@/components/common/Button';
 import { formatAmountInput, formatCurrency, parseAmount } from '@/utils/formatters';
 import { LIMITS, QUICK_DEPOSITS } from '@/config/limits';
@@ -184,6 +185,7 @@ export function Recarga() {
             {error && (
               <p role="alert" className="mt-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
                 {error}
+                <LimitLink message={error} />
               </p>
             )}
             <div className="mt-6 grid grid-cols-2 gap-3">

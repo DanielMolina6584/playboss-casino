@@ -6,6 +6,8 @@ import { FormField } from '@/components/common/FormField';
 import { Input } from '@/components/common/Input';
 import { PasswordInput } from '@/components/common/PasswordInput';
 import { Button } from '@/components/common/Button';
+import { GoogleSignInButton } from '@/components/auth/GoogleSignInButton';
+import { GOOGLE_BUTTON_AVAILABLE } from '@/config/auth';
 import { isRequired, isValidEmail } from '@/utils/validators';
 
 interface FormErrors {
@@ -14,7 +16,7 @@ interface FormErrors {
 }
 
 export function Login() {
-  const { login } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -49,6 +51,21 @@ export function Login() {
       navigate(redirectTo, { replace: true });
     } catch (err) {
       setSubmitError((err as { message?: string })?.message ?? 'No fue posible iniciar sesión.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleGoogle(credential: string) {
+    setSubmitError(null);
+    setLoading(true);
+    try {
+      const incomplete = await loginWithGoogle(credential);
+      showToast('¡Bienvenido!', 'success');
+      const from = (location.state as { from?: Location })?.from;
+      navigate(incomplete ? '/completar-perfil' : from ? `${from.pathname}${from.search ?? ''}` : '/', { replace: true });
+    } catch (err) {
+      setSubmitError((err as { message?: string })?.message ?? 'No fue posible iniciar sesión con Google.');
     } finally {
       setLoading(false);
     }
@@ -119,6 +136,15 @@ export function Login() {
             Iniciar sesión
           </Button>
         </form>
+
+        {GOOGLE_BUTTON_AVAILABLE && (
+          <div className="mt-5 space-y-4">
+            <div className="flex items-center gap-3 text-xs text-text-secondary">
+              <span className="h-px flex-1 bg-border-subtle" />o<span className="h-px flex-1 bg-border-subtle" />
+            </div>
+            <GoogleSignInButton onCredential={handleGoogle} disabled={loading} />
+          </div>
+        )}
 
         <p className="mt-6 text-center text-sm text-text-secondary">
           ¿No tienes cuenta?{' '}
