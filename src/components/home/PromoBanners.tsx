@@ -20,8 +20,8 @@ const promos = [
   },
   {
     tag: 'Depósitos',
-    title: 'Wompi, PSE y Nequi',
-    text: 'Recarga tu saldo en segundos desde tu celular.',
+    title: 'Mercado Pago, PSE y tarjetas',
+    text: 'Recarga tu saldo en segundos con un checkout seguro.',
     cta: 'Conocer métodos',
     to: '/#pagos',
     image: '/assets/banners/promo-pagos.svg',

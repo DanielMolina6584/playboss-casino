@@ -113,6 +113,8 @@ export interface Match {
   homeScore?: number | null;
   awayScore?: number | null;
   markets: Market[];
+  /** Total de mercados activos del partido (el listado solo trae el principal en markets). */
+  marketsCount?: number;
 }
 
 export interface MatchFilters {

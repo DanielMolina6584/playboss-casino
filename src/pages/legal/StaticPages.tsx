@@ -52,7 +52,7 @@ export function Terminos() {
       </S>
       <S h="4. Depósitos y retiros">
         <p>
-          Los depósitos se procesan mediante Wompi y se acreditan cuando el pago es aprobado. Monto mínimo de recarga:{' '}
+          Los depósitos se procesan mediante Mercado Pago y se acreditan cuando el pago es aprobado. Monto mínimo de recarga:{' '}
           {formatCurrency(LIMITS.minDeposit)}.
         </p>
       </S>
@@ -80,7 +80,7 @@ export function Privacidad() {
         <p>Puedes conocer, actualizar, rectificar y solicitar la supresión de tus datos (Ley 1581 de 2012) escribiendo a soporte.</p>
       </S>
       <S h="Terceros">
-        <p>Compartimos información estrictamente necesaria con proveedores de pago (Wompi). No vendemos tus datos.</p>
+        <p>Compartimos información estrictamente necesaria con proveedores de pago (Mercado Pago). No vendemos tus datos.</p>
       </S>
     </Doc>
   );
@@ -130,7 +130,7 @@ export function JuegoResponsable() {
 
 // Función (no constante de módulo): LIMITS se rellena desde la API antes del primer render.
 const getFaq = () => [
-  ['¿Cómo recargo saldo?', 'Ve a Billetera → Recargar, elige el monto y paga con tarjeta, Nequi o PSE a través de Wompi. El saldo se acredita al aprobarse el pago.'],
+  ['¿Cómo recargo saldo?', 'Ve a Billetera → Recargar, elige el monto y paga con tarjeta, PSE o saldo de Mercado Pago a través de Mercado Pago. El saldo se acredita al aprobarse el pago.'],
   ['¿Cuál es el monto mínimo para apostar?', `${formatCurrency(LIMITS.minStake)} por apuesta. Para recargar, ${formatCurrency(LIMITS.minDeposit)}.`],
   ['¿Qué es una apuesta combinada?', 'Reúne varias selecciones en un solo boleto: las cuotas se multiplican y debes acertar todas para ganar.'],
   ['¿Puedo cancelar una apuesta?', 'Sí, mientras esté activa y ninguno de sus partidos haya comenzado. Desde Mis apuestas → Cancelar.'],

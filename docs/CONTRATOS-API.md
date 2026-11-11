@@ -44,7 +44,12 @@ No hay endpoint de "verificar código"; la verificación real ocurre en `/auth/r
 - `GET /apuestas`, `GET /apuestas/{id}`, `POST /apuestas/{id}/cancelar`. Estados `PEND|GAN|PER|ANU|CASH` (`CASH` se muestra como anulada: no hay pantalla de cash-out).
 - Selección: `{ partido_id, partido, local, visitante, local_escudo_url, visitante_escudo_url, liga, fecha_partido, estado_partido, opcion, mercado, market_id, selection_code, etiqueta, cuota, resultado }`. El front ya no guarda nombres en localStorage.
 
-## Pagos (Wompi)
+## Pagos (Mercado Pago; Wompi sigue soportado)
+
+- `PAYMENT_GATEWAY_DRIVER=mercadopago`: `POST /pagos/depositos` devuelve `data.checkout_url` (Checkout Pro) y el front redirige a esa URL. Retorno a `/billetera/recarga/resultado` con `external_reference` (la referencia propia) y `payment_id`. Webhook: `POST /pagos/mercadopago/webhook`.
+- `GET /partidos?con_mercados=1` añade `mercado_principal` y `mercados_total` a cada partido (una consulta en vez de `/partidos/{id}/mercados` por partido).
+
+### Wompi
 - `POST /pagos/depositos` `{ monto, idempotency_key }` -> `{ referencia, estado, ..., checkout:{ public_key, reference, amount_in_cents, currency, signature_integrity, expiration_time?, redirect_url, checkout_url } }`.
 - El front arma `https://checkout.wompi.co/p/?public-key&currency&amount-in-cents&reference&signature:integrity&redirect-url[&expiration-time]` desde `data.checkout`.
 - Retorno: `/billetera/recarga/resultado` (alias `/pagos/resultado`). Wompi agrega `?id=<id de transacción Wompi>`; **`GET /pagos/{referencia}` busca por la referencia propia (`referencia_externa`), no por ese id**, así que el front usa la referencia guardada en sessionStorage (o `?referencia=`). Configurar `WOMPI_REDIRECT_URL` en el back a `<front>/billetera/recarga/resultado` (el `.env.example` del back apunta a `/pagos/resultado`).

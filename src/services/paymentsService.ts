@@ -33,7 +33,7 @@ interface ApiTransaccion {
 
 export const paymentMethods: { code: PaymentMethodCode; label: string; hint: string }[] = [
   { code: 'WOMPI_CARD', label: 'Tarjeta débito / crédito', hint: 'Visa, Mastercard y más' },
-  { code: 'NEQUI', label: 'Nequi', hint: 'Aprueba desde tu app Nequi' },
+  { code: 'NEQUI', label: 'Saldo o efectivo', hint: 'Dinero en Mercado Pago u otros medios' },
   { code: 'PSE', label: 'PSE', hint: 'Débito desde tu banco' },
 ];
 

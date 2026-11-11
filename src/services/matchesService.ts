@@ -28,6 +28,9 @@ interface ApiPartido {
   local: ApiEquipo;
   visitante: ApiEquipo;
   jornada?: { temporada?: { liga?: ApiLiga } };
+  /** Solo con ?con_mercados=1: mercado 1X2 y total de mercados activos. */
+  mercado_principal?: ApiMercado | null;
+  mercados_total?: number;
 }
 interface ApiMercado {
   id: string;
@@ -87,7 +90,7 @@ function escudoUrl(nombre: string): string {
   return `/assets/escudos/${slug}.png`;
 }
 
-function mapPartido(p: ApiPartido, markets: Market[]): Match {
+function mapPartido(p: ApiPartido, markets: Market[], marketsCount?: number): Match {
   const liga = p.jornada?.temporada?.liga;
   return {
     id: String(p.id_partido),
@@ -111,6 +114,7 @@ function mapPartido(p: ApiPartido, markets: Market[]): Match {
     homeScore: p.goles_local ?? null,
     awayScore: p.goles_visitante ?? null,
     markets,
+    marketsCount: marketsCount ?? markets.length,
   };
 }
 
@@ -154,6 +158,7 @@ export const matchesService = {
           `/partidos${toQuery({
             estado: 'PROG',
             per_page: 100,
+            con_mercados: 1,
             liga_id: filters.leagueId,
             q: filters.q?.trim() || undefined,
             desde: filters.from,
@@ -161,19 +166,15 @@ export const matchesService = {
           })}`,
           { auth: false },
         );
-        const withMarkets = await Promise.all(
-          res.data.items.map(async (p) => {
-            try {
-              const mk = await httpClient.get<ApiEnvelope<ApiMercado[]>>(`/partidos/${p.id_partido}/mercados`, {
-                auth: false,
-              });
-              return mapPartido(p, mk.data.map((m) => mapMercado(String(p.id_partido), m)));
-            } catch {
-              return mapPartido(p, []);
-            }
-          }),
+        // Una sola petición: la API trae el mercado principal y el total de mercados de cada partido.
+        const matches = res.data.items.map((p) =>
+          mapPartido(
+            p,
+            p.mercado_principal ? [mapMercado(String(p.id_partido), p.mercado_principal)] : [],
+            p.mercados_total ?? 0,
+          ),
         );
-        return applyFilters(withMarkets, {});
+        return applyFilters(matches, {});
       },
       () => applyFilters(mockMatches, filters),
     );

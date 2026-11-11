@@ -1,9 +1,9 @@
 import { SectionHeader } from '@/components/home/SectionHeader';
 
 const methods = [
-  { name: 'Wompi', detail: 'Tarjetas y botón Bancolombia', style: 'font-extrabold tracking-tight' },
+  { name: 'Mercado Pago', detail: 'Checkout seguro', style: 'font-extrabold tracking-tight' },
   { name: 'PSE', detail: 'Débito desde tu banco', style: 'font-black tracking-widest' },
-  { name: 'Nequi', detail: 'Desde tu celular', style: 'font-bold lowercase tracking-wide' },
+  { name: 'Tarjetas', detail: 'Débito y crédito', style: 'font-bold tracking-wide' },
 ];
 
 export function PaymentMethods() {

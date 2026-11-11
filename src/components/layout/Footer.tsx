@@ -17,7 +17,7 @@ const legalLinks = [
   { to: '/contacto', label: 'Contacto' },
 ];
 
-const payments = ['Wompi', 'PSE', 'Nequi'];
+const payments = ['Mercado Pago', 'PSE', 'Tarjetas'];
 
 export function Footer() {
   return (

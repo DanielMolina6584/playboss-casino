@@ -3,7 +3,7 @@ import { SectionHeader } from '@/components/home/SectionHeader';
 
 const steps = [
   { title: 'Regístrate', text: 'Crea tu cuenta gratis en un minuto. Debes ser mayor de 18 años.', icon: '/assets/illustrations/step-register.svg' },
-  { title: 'Deposita', text: 'Recarga tu saldo con Wompi, PSE o Nequi de forma segura.', icon: '/assets/illustrations/step-deposit.svg' },
+  { title: 'Deposita', text: 'Recarga tu saldo con Mercado Pago, PSE o tarjeta de forma segura.', icon: '/assets/illustrations/step-deposit.svg' },
   { title: 'Apuesta y gana', text: 'Elige tu partido, arma tu cupón y sigue la emoción.', icon: '/assets/illustrations/step-bet.svg' },
 ];
 

@@ -13,7 +13,7 @@ const OUTCOMES: { value: PaymentStatus; label: string; cls: string }[] = [
   { value: 'pending', label: 'Dejar pendiente', cls: 'btn-ghost' },
 ];
 
-/** Pasarela simulada (reemplaza a checkout.wompi.co cuando la API no está disponible). */
+/** Pasarela simulada (reemplaza a la pasarela de pagos cuando la API no está disponible). */
 export function RecargaSimulador() {
   const [params] = useSearchParams();
   const reference = params.get('referencia') ?? '';
@@ -39,7 +39,7 @@ export function RecargaSimulador() {
     <div className="container-page flex min-h-[70vh] max-w-md items-center py-8">
       <div className="card-surface w-full p-6 sm:p-8">
         <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">Pasarela simulada · Sandbox</p>
-        <h1 className="mt-2 text-xl font-bold text-text-primary">Simulador de Wompi</h1>
+        <h1 className="mt-2 text-xl font-bold text-text-primary">Simulador de pasarela</h1>
         <p className="mt-1 text-sm text-text-secondary">
           No se cobra dinero real. Elige el resultado que quieres probar.
         </p>
