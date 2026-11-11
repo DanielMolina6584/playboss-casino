@@ -30,6 +30,7 @@ import { RecuperarCodigo } from '@/pages/auth/RecuperarCodigo';
 import { RecuperarNuevaContrasena } from '@/pages/auth/RecuperarNuevaContrasena';
 import { VerificacionDosPasos } from '@/pages/auth/VerificacionDosPasos';
 import { MfaRequiredListener } from '@/router/MfaRequiredListener';
+import { ApiWakingBanner } from '@/components/common/ApiWakingBanner';
 
 export default function App() {
   return (
@@ -39,6 +40,7 @@ export default function App() {
           <WalletProvider>
             <BetSlipProvider>
               <MfaRequiredListener />
+              <ApiWakingBanner />
               <Routes>
                 <Route element={<AppLayout />}>
                   {/* Rutas públicas */}
