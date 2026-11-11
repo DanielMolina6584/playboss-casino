@@ -73,7 +73,7 @@ export function buildWompiUrl(c: Omit<WompiCheckout, 'checkoutUrl'>): string {
 
 function mapTransaccion(t: ApiTransaccion): PaymentTransaction {
   const c = t.checkout;
-  const checkout: WompiCheckout | undefined = c
+  let checkout: WompiCheckout | undefined = c
     ? {
         publicKey: c.public_key,
         reference: c.reference,
@@ -85,7 +85,11 @@ function mapTransaccion(t: ApiTransaccion): PaymentTransaction {
         checkoutUrl: '',
       }
     : undefined;
-  if (checkout) checkout.checkoutUrl = buildWompiUrl(checkout);
+  if (checkout) checkout.checkoutUrl = c?.checkout_url || buildWompiUrl(checkout);
+  // Mercado Pago: la API no manda datos firmados, solo la URL de pago lista (checkout_url).
+  else if (t.checkout_url) {
+    checkout = { publicKey: '', reference: t.referencia, amountInCents: Math.round(Number(t.monto) * 100), currency: t.moneda, signature: '', checkoutUrl: t.checkout_url };
+  }
   return {
     reference: t.referencia,
     type: t.tipo === 'RETIRO' ? 'withdrawal' : 'deposit',

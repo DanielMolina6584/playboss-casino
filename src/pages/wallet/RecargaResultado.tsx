@@ -38,7 +38,7 @@ const VIEW: Record<PaymentStatus, { title: string; text: string; tone: string; i
 
 export function RecargaResultado() {
   const [params] = useSearchParams();
-  const reference = params.get('referencia') ?? params.get('reference') ?? params.get('ref') ?? recallReference();
+  const reference = params.get('referencia') ?? params.get('reference') ?? params.get('ref') ?? params.get('external_reference') ?? recallReference();
   const { refresh } = useWallet();
   const [tx, setTx] = useState<PaymentTransaction | null>(null);
   const [error, setError] = useState<string | null>(null);
