@@ -58,7 +58,7 @@ export function Recarga() {
 
   return (
     <div className="container-page max-w-2xl py-8">
-      <PageHeader title="Recargar saldo" description="Deposita con Wompi de forma segura." backTo={{ to: '/billetera', label: 'Mi billetera' }} />
+      <PageHeader title="Recargar saldo" description="Deposita de forma segura con nuestra pasarela de pagos." backTo={{ to: '/billetera', label: 'Mi billetera' }} />
 
       <ol className="mb-6 grid grid-cols-3 gap-2" aria-label="Pasos de la recarga">
         {STEPS.map((label, i) => {
@@ -147,7 +147,7 @@ export function Recarga() {
               ))}
             </fieldset>
             <p className="mt-3 text-xs text-text-secondary">
-              Wompi te mostrará los medios disponibles al pagar; puedes cambiar de método allí si lo necesitas.
+              La pasarela te mostrará los medios disponibles al pagar; puedes cambiar de método allí si lo necesitas.
             </p>
             <div className="mt-6 grid grid-cols-2 gap-3">
               <Button variant="secondary" onClick={() => setStep(1)}>
@@ -180,7 +180,7 @@ export function Recarga() {
               </div>
             </dl>
             <p className="mt-3 text-xs text-text-secondary">
-              Al continuar te llevaremos a la pasarela segura de Wompi. Tu saldo se acredita cuando el pago sea aprobado.
+              Al continuar te llevaremos a la pasarela de pagos segura. Tu saldo se acredita cuando el pago sea aprobado.
             </p>
             {error && (
               <p role="alert" className="mt-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
